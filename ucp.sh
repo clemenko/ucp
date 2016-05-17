@@ -50,8 +50,6 @@ echo " starting ucp server."
 server=$(cat hosts.txt|head -1|awk '{print $3}')
 fingerprint=$(ssh core@$server "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp install --admin-password $password --host-address $server" 2>&1 |grep Fingerprint|awk '{print $7}'|sed -e 's/Fingerprint=//g' -e 's/"//g')
 
-echo $fingerprint > fingerprint.txt
-
 echo " adding licenses."
 token=$(curl -sk "https://$server/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
 curl -k "https://$server/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
