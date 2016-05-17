@@ -58,6 +58,10 @@ echo " setting up nodes."
 node_list=$(cat hosts.txt |grep -v "$server"|awk '{printf $3","}')
 pdsh -l core -w $node_list "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$server" > /dev/null 2>&1
 
+echo " downloading certs"
+AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"$password"}' https://$server/auth/login | jq -r .auth_token)
+curl -k -H "Authorization: Bearer $AUTHTOKEN" https://$server/api/clientbundle -o bundle.zip
+
 echo " restarting docker daemons"
  pdsh -l core -w $host_list "sudo systemctl restart docker"
 
@@ -91,5 +95,5 @@ case "$1" in
         up) up;;
         kill) kill;;
         status) status;;
-        *) echo "Usage: $0 {up|kill|status|presentation}"; exit 1
+        *) echo "Usage: $0 {up|kill|status}"; exit 1
 esac
