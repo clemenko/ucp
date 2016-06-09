@@ -4,23 +4,24 @@
 ###################################
 num=3
 prefix=ucp
-project=dev
-image="coreos_1010"
-flavor=mash.memory.small
-key_name=labnc_186
+#gui admin password
 password=Pa22word
-license_file="/home/clemenko/Downloads/docker_subscription.lic"
+version=v1.0.2
+zone=nyc2
+size=2gb
+key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
+image=coreos-stable
+password=Pa22word
+license_file="../docker_subscription.lic"
 
+export PDSH_RCMD_TYPE=ssh
 ################################# up ################################
 function build () {
+# change for your cloud provider.
+# uuid=$(cat /proc/sys/kernel/random/uuid | awk -F"-" '{print $1}')
  uuid=$(uuidgen| awk -F"-" '{print $1}')
- echo -n " building : $prefix-$uuid "
- supernova -q $project boot --flavor $flavor --key-name $key_name --image "$image" --config-drive true $prefix-$uuid > /dev/null 2>&1
- until [ $(supernova -q $project show $prefix-$uuid | grep status | awk '{print $4}') = "ACTIVE" ]; do echo -n "."; sleep 3; done
- next_ip=$(supernova dev floating-ip-list | grep -v "172.16"|grep "10.0.141"|head -1|awk '{print $4}')
- supernova -q $project add-floating-ip $prefix-$uuid $next_ip
- echo $prefix-$uuid $(supernova -q $project show $prefix-$uuid | grep network|awk '{print $5" "$6}' | grep -v DELETE|sed 's/,//g') >> hosts.txt
- echo ""
+ echo " building : $prefix-$uuid "
+ doctl compute droplet create $prefix-$uuid --region $zone --image $image --size $size --ssh-keys $key  > /dev/null 2>&1
 }
 
 function up () {
@@ -31,15 +32,16 @@ function up () {
    build
  done
 
-sleep 30
+sleep 10
+doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.txt
 
 echo -n " checking for ssh."
-for ext in $(cat hosts.txt|awk '{print $3}'); do
- until [ $(ssh -o ConnectTimeout=1 core@$ext 'exit' 2>&1 | grep 'timed out' | wc -l) = 0 ]; do echo -n "." ; done
+for ext in $(cat hosts.txt|awk '{print $1}'); do
+  until [ $(ssh -o ConnectTimeout=1 core@$ext 'exit' 2>&1 | grep 'timed out' | wc -l) = 0 ]; do echo -n "." ; done
 done
 echo ""
 
-host_list=$(cat hosts.txt|awk '{printf $3","}'|sed 's/,$//')
+host_list=$(cat hosts.txt|awk '{printf $1","}'|sed 's/,$//')
 
  #add etc hosts
  #etc_hosts_cmd=$(cat hosts.txt|awk '{printf "echo "$2" "$1"| sudo tee --append /etc/hosts;"}'|sed 's/.$//')
@@ -47,20 +49,22 @@ host_list=$(cat hosts.txt|awk '{printf $3","}'|sed 's/,$//')
 
 echo " starting ucp server."
 
-server=$(cat hosts.txt|head -1|awk '{print $3}')
+server=$(cat hosts.txt|head -1|awk '{print $1}')
 fingerprint=$(ssh core@$server "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp install --admin-password $password --host-address $server" 2>&1 |grep Fingerprint|awk '{print $7}'|sed -e 's/Fingerprint=//g' -e 's/"//g')
+
+sleep 5
 
 echo " adding licenses."
 token=$(curl -sk "https://$server/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
 curl -k "https://$server/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
 
 echo " setting up nodes."
-node_list=$(cat hosts.txt |grep -v "$server"|awk '{printf $3","}')
+node_list=$(cat hosts.txt |grep -v "$server"|awk '{printf $1","}')
 pdsh -l core -w $node_list "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$server" > /dev/null 2>&1
 
 echo " downloading certs"
 AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"$password"}' https://$server/auth/login | jq -r .auth_token)
-curl -k -H "Authorization: Bearer $AUTHTOKEN" https://$server/api/clientbundle -o bundle.zip
+curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$server/api/clientbundle -o bundle.zip
 
 echo " restarting docker daemons"
  pdsh -l core -w $host_list "sudo systemctl restart docker"
@@ -74,15 +78,16 @@ status
 ############################## destroy ################################
 function kill () {
 echo " killing it all."
-for i in $(cat hosts.txt|awk '{print $1}'); do supernova $project delete $i; done
-for i in $(cat hosts.txt|awk '{print $3}'); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-rm -rf *.txt *.log
+for i in $(cat hosts.txt|awk '{print $2}'); do doctl compute droplet delete $i; done
+for i in $(cat hosts.txt|awk '{print $1}'); do ssh-keygen -q -R $i > /dev/null 2>&1; done
+rm -rf *.txt *.log *.zip
 }
 
 ############################# status ################################
 function status () {
+  server=$(cat hosts.txt|head -1|awk '{print $1}')
   echo "===== Cluster ====="
-  supernova $project list |grep $prefix
+  doctl compute droplet list |grep $prefix
   echo ""
   echo "===== Dashboards ====="
   echo " - server   : https://$server"
