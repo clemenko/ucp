@@ -4,9 +4,7 @@
 ###################################
 num=3
 prefix=ucp
-#gui admin password
 password=Pa22word
-version=v1.0.2
 zone=nyc2
 size=2gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
@@ -17,8 +15,6 @@ license_file="../docker_subscription.lic"
 export PDSH_RCMD_TYPE=ssh
 ################################# up ################################
 function build () {
-# change for your cloud provider.
-# uuid=$(cat /proc/sys/kernel/random/uuid | awk -F"-" '{print $1}')
  uuid=$(uuidgen| awk -F"-" '{print $1}')
  echo " building : $prefix-$uuid "
  doctl compute droplet create $prefix-$uuid --region $zone --image $image --size $size --ssh-keys $key  > /dev/null 2>&1
@@ -42,10 +38,6 @@ done
 echo ""
 
 host_list=$(cat hosts.txt|awk '{printf $1","}'|sed 's/,$//')
-
- #add etc hosts
- #etc_hosts_cmd=$(cat hosts.txt|awk '{printf "echo "$2" "$1"| sudo tee --append /etc/hosts;"}'|sed 's/.$//')
- #pdsh -l core -w $host_list 'chmod u+w /etc/hosts; sed -i -e "/127.0.0.1 $HOSTNAME/d" -e "/::1 $HOSTNAME/d" /etc/hosts'
 
 echo " starting ucp server."
 
