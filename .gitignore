@@ -1,3 +1,4 @@
 .gitignore
 hosts.txt
 bundle.zip
+*.lic
