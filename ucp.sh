@@ -6,9 +6,9 @@ num=3
 prefix=ucp
 password=Pa22word
 zone=nyc2
-size=2gb
+size=1gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
-#image=coreos-stable
+#image=centos-7-2-x64
 image=ubuntu-16-04-x64
 password=Pa22word
 license_file="docker_subscription.lic"
@@ -41,8 +41,7 @@ echo ""
 
 host_list=$(cat hosts.txt|awk '{printf $1","}'|sed 's/,$//')
 echo " installing latest docker"
-pdsh -l root -w $host_list 'curl -fsSL https://get.docker.com/ | sh; systemctl enable docker; systemctl start docker' > /dev/null 2>&1
-
+pdsh -l root -w $host_list 'curl -fsSL https://experimental.docker.com/ | sh; systemctl enable docker; systemctl start docker' > /dev/null 2>&1
 
 echo " starting ucp server."
 
@@ -60,11 +59,22 @@ node_list=$(cat hosts.txt |grep -v "$server"|awk '{printf $1","}')
 pdsh -l root -w $node_list "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$server" > /dev/null 2>&1
 
 echo " downloading certs"
-AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"$password"}' https://$server/auth/login | jq -r .auth_token)
+AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$server/auth/login | jq -r .auth_token)
 curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$server/api/clientbundle -o bundle.zip
 
 echo " restarting docker daemons"
- pdsh -l root -w $host_list "sudo systemctl restart docker"
+pdsh -l root -w $host_list "sudo systemctl restart docker"
+until [ $(curl -sk https://$server/ca|grep BEGIN|wc -l) = 1 ]; do echo -n "."; done
+echo ""
+
+echo " installing DTR"
+dtr_server=$(cat hosts.txt |grep -v "$server"|head -1|awk '{printf $1}')
+dtr_node=$(cat hosts.txt|grep -v "$server"|head -1|awk '{printf $2}')
+unzip bundle.zip > /dev/null 2>&1
+curl -sk https://$server/ca > ucp-ca.pem
+echo "export DOCKER_API_VERSION=1.23" >> env.sh
+eval $(<env.sh)
+docker run -it --rm docker/dtr install --ucp-url https://$server --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"
 
 echo ""
 echo "========= UCP install complete ========="
@@ -77,7 +87,7 @@ function kill () {
 echo " killing it all."
 for i in $(cat hosts.txt|awk '{print $2}'); do doctl compute droplet delete $i; done
 for i in $(cat hosts.txt|awk '{print $1}'); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-rm -rf *.txt *.log *.zip
+rm -rf *.txt *.log *.zip *.pem *.pub env.*
 }
 
 ############################# status ################################
@@ -87,7 +97,11 @@ function status () {
   doctl compute droplet list |grep $prefix
   echo ""
   echo "===== Dashboards ====="
-  echo " - server   : https://$server"
+  echo " - UCP   : https://$server"
+  echo " - username : admin"
+  echo " - password : "$password
+  echo ""
+  echo " - DTR   : https://$dtr_server"
   echo " - username : admin"
   echo " - password : "$password
   echo ""
