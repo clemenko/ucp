@@ -1,6 +1,9 @@
 .gitignore
-hosts.txt
-bundle.zip
+*.zip
 *.lic
 *.gz
 *.tar
+*.pem
+*.pub
+*.txt
+env*
