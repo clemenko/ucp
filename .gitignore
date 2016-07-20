@@ -2,3 +2,5 @@
 hosts.txt
 bundle.zip
 *.lic
+*.gz
+*.tar
