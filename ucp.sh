@@ -6,7 +6,7 @@ num=5  #4 or larger please!
 prefix=ucp
 password=Pa22word
 zone=nyc2
-size=1gb
+size=2gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 #image=centos-7-2-x64
 image=ubuntu-16-04-x64
@@ -58,6 +58,7 @@ pdsh -l root -w $host_list 'curl -fsSL https://experimental.docker.com/ | sh; sy
 echo " starting ucp server."
 
 fingerprint=$(ssh root@$manager1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp install --admin-password $password --host-address $manager1" 2>&1 |grep Fingerprint|awk '{print $7}'|sed -e 's/Fingerprint=//g' -e 's/"//g')
+echo $fingerprint > fingerprint.txt
 
 sleep 5
 
@@ -66,14 +67,16 @@ token=$(curl -sk "https://$manager1/auth/login" -X POST -d '{"username":"admin",
 curl -k "https://$manager1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
 
 echo " backing up controller CA's"
-ssh root@$manager1 'echo yes|docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp backup --root-ca-only --passphrase "'$secret'" > /tmp/backup.tar' > /dev/null 2>&1
+ssh root@$manager1 'echo yes|docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp backup --root-ca-only --interactive --passphrase "'$secret'" > /tmp/backup.tar' > /dev/null 2>&1
 rsync -avP root@$manager1:/tmp/backup.tar . > /dev/null 2>&1
 
 echo " setting up mangers"
 rsync -avP backup.tar root@$manager2:/tmp > /dev/null 2>&1
 rsync -avP backup.tar root@$manager3:/tmp > /dev/null 2>&1
-ssh -t root@$manager2 "docker run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/backup.tar:/backup.tar docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$manager1 --replica --passphrase $secret"
-ssh -t root@$manager3 "docker run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/backup.tar:/backup.tar docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$manager1 --replica --passphrase $secret"
+
+ssh -t root@$manager2 "docker run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/backup.tar:/backup.tar docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$manager1 --replica --passphrase $secret" > /dev/null 2>&1
+
+ssh -t root@$manager3 "docker run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/backup.tar:/backup.tar docker/ucp join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$manager1 --replica --passphrase $secret" > /dev/null 2>&1
 
 echo " setting up nodes."
 node_list=$(cat hosts.txt |sed -n 3,"$num"p|awk '{printf $1","}')
@@ -91,7 +94,8 @@ echo ""
 echo " installing DTR"
 unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$manager1/ca > ucp-ca.pem
-sed -i '/DOCKER_HOST/a export DOCKER_API_VERSION=1.23' env.sh
+
+#sed -i '' -e '/DOCKER_HOST/a export DOCKER_API_VERSION=1.23' env.sh
 eval $(<env.sh)
 export DOCKER_API_VERSION=1.23
 docker run -it --rm docker/dtr install --ucp-url https://$manager1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)" > /dev/null 2>&1
