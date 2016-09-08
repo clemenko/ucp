@@ -2,14 +2,14 @@
 ###################################
 # edit vars
 ###################################
-num=5  #4 or larger please!
+num=6  #4 or larger please!
 prefix=ucp
 password=Pa22word
 zone=nyc2
 size=1gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
-#image=centos-7-2-x64
-image=ubuntu-16-04-x64
+image=centos-7-2-x64
+#image=ubuntu-16-04-x64
 password=Pa22word
 license_file="docker_subscription.lic"
 
@@ -33,7 +33,7 @@ echo $secret > secret.txt
    build
  done
 
-sleep 10
+sleep 30
 doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.txt
 
 echo -n " checking for ssh."
@@ -54,6 +54,9 @@ dtr_node=$(cat hosts.txt|sed -n 4p|awk '{printf $2}')
 
 echo " installing latest docker"
 pdsh -l root -w $host_list 'curl -fsSL https://get.docker.com/ |  sh;  systemctl enable docker;  systemctl start docker' > /dev/null 2>&1
+
+echo " adding overlay"
+pdsh -l root -w $host_list ' echo "{ \"storage-driver\": \"overlay\"}" > /etc/docker/daemon.json'
 
 echo " starting ucp server."
 
@@ -91,12 +94,14 @@ pdsh -l root -w $host_list " systemctl restart docker"
 until [ $(curl -sk https://$manager1/ca|grep BEGIN|wc -l) = 1 ]; do echo -n "."; sleep 5; done
 echo ""
 
+
+sleep 30
 echo " installing DTR"
 unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$manager1/ca > ucp-ca.pem
 eval $(<env.sh)
 export DOCKER_API_VERSION=1.23
-docker run -it --rm docker/dtr install --ucp-url https://$manager1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)" > /dev/null 2>&1
+docker run -it --rm docker/dtr install --ucp-url https://$manager1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"
 
 echo ""
 echo "========= UCP install complete ========="

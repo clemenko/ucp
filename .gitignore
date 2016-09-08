@@ -7,3 +7,4 @@
 *.pub
 *.txt
 env*
+dev_ucp.sh
