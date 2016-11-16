@@ -94,7 +94,7 @@ echo " installing DTR"
 unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$manager1/ca > ucp-ca.pem
 eval $(<env.sh)
-ssh -t root@$dtr_server "curl -sk https://$manager1/ca > /root/ucp-ca.pem; docker run -it --rm docker/dtr install --ucp-url https://$manager1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca '$(cat ucp-ca.pem)' " 
+ssh -t root@$dtr_server "curl -sk https://$manager1/ca > /root/ucp-ca.pem; docker run -it --rm docker/dtr install --ucp-url https://$manager1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca '$(cat ucp-ca.pem)' "
 #--nfs-storage-url nfs://$dtr_server/opt
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 
@@ -114,7 +114,7 @@ echo $min_secret > min_secret.txt
 
 
 #Add DTR CA to all the nodes (ALL):
-pdsh -l root -w $node_list "mkdir -p /etc/docker/certs.d/$dtr_server/; curl -sk https://$dtr_server/ca > /etc/docker/certs.d/$dtr_server/ca.crt; service docker restart" > /dev/null 2>&1
+pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust/source/anchors/$dtr_server.crt; update-ca-trust; service docker restart" > /dev/null 2>&1
 
 #notary notes
 #add dtr_ca.pem to all the nodes.
