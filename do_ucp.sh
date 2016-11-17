@@ -89,6 +89,10 @@ echo " downloading certs"
 AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$manager1/auth/login | jq -r .auth_token)
 curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$manager1/api/clientbundle -o bundle.zip
 
+echo " disableing scheduling on controllers"
+token=$(curl -sk "https://$manager1/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
+curl -k "https://$manager1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":false,\"enable_user_ucp_scheduling\":false}"
+
 sleep 20
 echo " installing DTR"
 unzip bundle.zip > /dev/null 2>&1
@@ -125,6 +129,13 @@ pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust
 #docker tag 107.170.2.91/admin/alpine 107.170.2.91/admin/alpine:signed
 #mkdir -p ~/.docker/tls/107.170.2.91/
 #rsync -avP dtr-ca.pem ~/.docker/tls/107.170.2.91/ca.crt
+
+#curl notes
+#curl \
+#    --cert ${DOCKER_CERT_PATH}/cert.pem \
+#    --key ${DOCKER_CERT_PATH}/key.pem \
+#    --cacert ${DOCKER_CERT_PATH}/ca.pem \
+#    ${UCP_URL}/info | jq "."
 
 echo ""
 echo "========= UCP install complete ========="
