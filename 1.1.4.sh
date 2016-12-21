@@ -45,26 +45,19 @@ dtr_server=$(cat hosts.txt|sed -n 2p|awk '{printf $1}')
 dtr_node=$(cat hosts.txt|sed -n 2p|awk '{printf $2}')
 
 echo " adding ntp and syncing time"
-pdsh -l root -w $host_list 'yum update -y; yum install -y ntp; ntpdate -s 0.centos.pool.ntp.org; systemctl start ntpd' > /dev/null 2>&1
+pdsh -l root -w $host_list 'yum install -y ntp rsync; ntpdate -s 0.centos.pool.ntp.org; systemctl start ntpd' > /dev/null 2>&1
 
 echo " installing latest docker"
-pdsh -l root -w $host_list 'curl -sSLf https://packages.docker.com/1.12/install.sh | repo=testing bash;  systemctl enable docker;  systemctl start docker' > /dev/null 2>&1
+pdsh -l root -w $host_list 'curl -sSLf https://packages.docker.com/1.12/install.sh | bash;  systemctl enable docker;  systemctl start docker' > /dev/null 2>&1
 
 echo " adding overlay storage driver"
-#pdsh -l root -w $host_list ' echo "{ \"storage-driver\": \"overlay2\"}" > /etc/docker/daemon.json; systemctl restart docker'
-pdsh -l root -w $host_list 'echo -e "{ \"storage-driver\": \"overlay2\", \n  \"storage-opts\": [\"overlay2.override_kernel_check=true\"]\n}" > /etc/docker/daemon.json; systemctl restart docker'
+pdsh -l root -w $host_list ' echo "{ \"storage-driver\": \"overlay\"}" > /etc/docker/daemon.json; systemctl restart docker'
+
+#for i in $(cat hosts.txt|awk '{print $1}'|sed 's/,$//'); do rsync -avP ~/Dropbox/docker/metlife/ucp_images_1.1.5-rc1.tar.gz  root@$i:/tmp/; ssh -t root@$i 'docker load < /tmp/ucp_images_1.1.5-rc1.tar.gz'; done
 
 echo " starting ucp server"
-ssh root@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp install --admin-password $password --host-address $controller1" > /dev/null 2>&1
+fingerprint=$(ssh root@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:1.1.5 install --admin-password $password --host-address $controller1" 2>&1 |grep Fingerprint|awk '{print $7}'|sed -e 's/Fingerprint=//g' -e 's/"//g')
 
-echo " getting tokens"
-MGRTOKEN=$(ssh root@$controller1 "docker swarm join-token -q manager")
-WRKTOKEN=$(ssh root@$controller1 "docker swarm join-token -q worker")
-echo $MGRTOKEN > manager_token.txt
-echo $WRKTOKEN > worker_token.txt
-
-#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -sk "https://$controller1/swarm" -H "Authorization: Bearer $token"|jq .JoinTokens
 
 sleep 10
 
@@ -72,13 +65,12 @@ echo " adding license"
 token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
 curl -k "https://$controller1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
 
-#echo " setting up mangers"
-#pdsh -l root -w $manager2,$manager3 "docker swarm join --token $MGRTOKEN $controller1:2377" > /dev/null 2>&1
 
 sleep 10
 echo " setting up nodes"
 node_list=$(cat hosts.txt |sed -n 1,"$num"p|awk '{printf $1","}')
-pdsh -l root -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
+pdsh -l root -w $node_list "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:1.1.5 join --admin-username admin --admin-password $password --fingerprint $fingerprint --url https://$controller1" > /dev/null 2>&1
+
 
 echo " downloading certs"
 AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
@@ -87,14 +79,14 @@ curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$controller1/api/clientbu
 sleep 20
 
 echo " setting up minio"
-ssh root@$dtr_server 'chmod -R 777 /opt/; docker run -d -p 9000:9000 --name minio minio/minio server /opt' > /dev/null 2>&1
-min_access=$(ssh root@$dtr_server "docker logs minio |grep AccessKey |awk '{print \$2}'")
-echo $min_access > min_access.txt
-min_secret=$(ssh root@$dtr_server "docker logs minio |grep SecretKey |awk '{print \$2}'")
-echo $min_secret > min_secret.txt
+#ssh root@$dtr_server 'chmod -R 777 /opt/; docker run -d -p 9000:9000 --name minio minio/minio server /opt' > /dev/null 2>&1
+#min_access=$(ssh root@$dtr_server "docker logs minio |grep AccessKey |awk '{print \$2}'")
+#echo $min_access > min_access.txt
+#min_secret=$(ssh root@$dtr_server "docker logs minio |grep SecretKey |awk '{print \$2}'")
+#echo $min_secret > min_secret.txt
 
 echo " building nfs server for dtr"
-ssh root@$dtr_server 'chmod -R 777 /opt/; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server  ' > /dev/null 2>&1
+#ssh root@$dtr_server 'chmod -R 777 /opt/; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server  ' > /dev/null 2>&1
 
 echo " installing DTR"
 unzip bundle.zip > /dev/null 2>&1
@@ -102,17 +94,17 @@ curl -sk https://$controller1/ca > ucp-ca.pem
 
 eval $(<env.sh)
 #ssh -t root@$dtr_server "curl -sk https://$controller1/ca > /root/ucp-ca.pem; docker run -it --rm docker/dtr install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca '$(cat ucp-ca.pem)' "
-docker run -it --rm docker/dtr install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"
+#docker run -it --rm docker/dtr:2.0.4 install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"
 #--nfs-storage-url nfs://$dtr_server/opt
-curl -sk https://$dtr_server/ca > dtr-ca.pem
+#curl -sk https://$dtr_server/ca > dtr-ca.pem
 
 echo " disabling scheduling on controllers"
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -k "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
+#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":'$password'"}'|jq -r .auth_token)
+#curl -k "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
 
 echo " updating nodes with DTR's CA"
 #Add DTR CA to all the nodes (ALL):
-pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust/source/anchors/$dtr_server.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
+#pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust/source/anchors/$dtr_server.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
 
 #notary notes
 #add dtr_ca.pem to all the nodes.
@@ -123,11 +115,6 @@ pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust
 #docker tag 107.170.2.91/admin/alpine 107.170.2.91/admin/alpine:signed
 #mkdir -p ~/.docker/tls/107.170.2.91/
 #rsync -avP dtr-ca.pem ~/.docker/tls/107.170.2.91/ca.crt
-
-
-#prometheus : https://github.com/docker/orca/blob/master/project/prometheus.md
-#docker run --rm -i -v $(pwd):/data -v ucp-metrics-inventory:/inventory -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml -p 9090:9090 prom/prometheus
-
 
 #curl notes
 #curl \
