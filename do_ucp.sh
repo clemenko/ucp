@@ -8,7 +8,7 @@ password=Pa22word
 zone=nyc1
 size=1gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
-image=centos-7-2-x64
+image=centos-7-x64
 #image=ubuntu-16-04-x64
 password=Pa22word
 license_file="docker_subscription.lic"
@@ -48,7 +48,7 @@ echo " adding ntp and syncing time"
 pdsh -l root -w $host_list 'yum update -y; yum install -y ntp; ntpdate -s 0.centos.pool.ntp.org; systemctl start ntpd' > /dev/null 2>&1
 
 echo " installing latest docker"
-pdsh -l root -w $host_list 'curl -sSLf https://packages.docker.com/1.12/install.sh | repo=testing bash;  systemctl enable docker;  systemctl start docker' > /dev/null 2>&1
+pdsh -l root -w $host_list 'curl -sSLf https://packages.docker.com/1.12/install.sh | bash;  systemctl enable docker;  systemctl start docker' > /dev/null 2>&1
 
 echo " adding overlay storage driver"
 #pdsh -l root -w $host_list ' echo "{ \"storage-driver\": \"overlay2\"}" > /etc/docker/daemon.json; systemctl restart docker'
@@ -102,7 +102,7 @@ curl -sk https://$controller1/ca > ucp-ca.pem
 
 eval $(<env.sh)
 #ssh -t root@$dtr_server "curl -sk https://$controller1/ca > /root/ucp-ca.pem; docker run -it --rm docker/dtr install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca '$(cat ucp-ca.pem)' "
-docker run -it --rm docker/dtr install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url $dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"
+docker run -it --rm docker/dtr install --ucp-url https://$controller1 --ucp-node $dtr_node --dtr-external-url https://$dtr_server --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"  > /dev/null 2>&1
 #--nfs-storage-url nfs://$dtr_server/opt
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 
@@ -113,6 +113,7 @@ curl -k "https://$controller1/api/config/scheduling" -X POST -H "Authorization: 
 echo " updating nodes with DTR's CA"
 #Add DTR CA to all the nodes (ALL):
 pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust/source/anchors/$dtr_server.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
+#ubuntu : curl -sk https://$dtr_server/ca -o /usr/local/share/ca-certificates/$dtr_server.crt; update-ca-certificates; systemctl restart docker
 
 #notary notes
 #add dtr_ca.pem to all the nodes.
