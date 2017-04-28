@@ -3,16 +3,16 @@
 # edit vars
 ###################################
 set -eu
-num=4  #3 or larger please!
+num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc1
 size=2gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 image=centos-7-x64
-password=Pa22word
 license_file="docker_subscription.lic"
 ee_url=$(cat url.env)
+doctl_TOKEN=$(cat ~/.config/doctl/config.yaml|awk '{print $2}')
 ucp_ver=latest
 
 ######  NO MOAR EDITS #######
@@ -52,11 +52,16 @@ dtr_node=$(sed -n 2p hosts.txt|awk '{printf $2}')
 hrm_server=$(sed -n 3p hosts.txt|awk '{printf $1}')
 
 echo -n " updating dns "
-doctl compute domain records create shirtmullet.com --record-type A --record-name ucp --record-data $controller1 > /dev/null 2>&1
-doctl compute domain records create shirtmullet.com --record-type A --record-name dtr --record-data $dtr_server > /dev/null 2>&1
+curl -u "$doctl_TOKEN:" -X POST -H "Content-Type: application/json" -d '{"type":"A","name":"ucp","data":"'$controller1'","priority":null,"port":null,"ttl":300,"weight":null}' "https://api.digitalocean.com/v2/domains/shirtmullet.com/records" > /dev/null 2>&1
+
+curl -u "$doctl_TOKEN:" -X POST -H "Content-Type: application/json" -d '{"type":"A","name":"dtr","data":"'$dtr_server'","priority":null,"port":null,"ttl":300,"weight":null}' "https://api.digitalocean.com/v2/domains/shirtmullet.com/records" > /dev/null 2>&1
+
+#doctl compute domain records create shirtmullet.com --record-type A --record-name ucp --record-data $controller1 > /dev/null 2>&1
+#doctl compute domain records create shirtmullet.com --record-type A --record-name dtr --record-data $dtr_server > /dev/null 2>&1
 doctl compute domain records create shirtmullet.com --record-type A --record-name pets --record-data $hrm_server > /dev/null 2>&1
 doctl compute domain records create shirtmullet.com --record-type A --record-name admin --record-data $hrm_server > /dev/null 2>&1
 doctl compute domain records create shirtmullet.com --record-type A --record-name flask --record-data $hrm_server > /dev/null 2>&1
+doctl compute domain records create shirtmullet.com --record-type A --record-name suntrust --record-data $hrm_server > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " adding ntp and syncing time "
@@ -90,9 +95,8 @@ echo -n " adding overlay storage driver "
 pdsh -l root -w $host_list 'echo -e "{ \"storage-driver\": \"overlay2\", \n  \"storage-opts\": [\"overlay2.override_kernel_check=true\"]\n}" > /etc/docker/daemon.json; systemctl restart docker'
 echo "$GREEN" "[OK]" "$NORMAL"
 
-
 echo -n " starting ucp server "
-ssh root@$controller1 "docker run --rm -i --name ucp --privileged -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com" > /dev/null 2>&1
+ssh root@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -105,7 +109,7 @@ echo "$GREEN" "[OK]" "$NORMAL"
 sleep 10
 
 echo -n " adding license "
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
+token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
 curl -k "https://$controller1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
 echo "$GREEN" "[OK]" "$NORMAL"
 
@@ -118,12 +122,12 @@ node_list=$(sed -n 1,"$num"p hosts.txt|awk '{printf $1","}')
 pdsh -l root -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
-echo -n " downloading certs "
+echo -n " downloading client bundle "
 AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
 curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$controller1/api/clientbundle -o bundle.zip
 echo "$GREEN" "[OK]" "$NORMAL"
 
-sleep 20
+sleep 60
 
 #echo -n " building nfs server for dtr "
 #ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
@@ -134,7 +138,11 @@ unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$controller1/ca > ucp-ca.pem
 
 eval $(<env.sh)
-docker run -it --rm docker/dtr install --ucp-url https://ucp.shirtmullet.com --ucp-node $dtr_node --dtr-external-url https://dtr.shirtmullet.com --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)"  > /dev/null 2>&1
+#docker run -it --rm docker/dtr install --ucp-url https://ucp.shirtmullet.com --ucp-node $dtr_node --dtr-external-url https://dtr.shirtmullet.com --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)" > /dev/null 2>&1
+
+docker run -it --rm docker/dtr install --ucp-url https://ucp.shirtmullet.com --ucp-node $dtr_node --dtr-external-url https://dtr.shirtmullet.com --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
+
+
 #--nfs-storage-url nfs://$dtr_server/opt
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 echo "$GREEN" "[OK]" "$NORMAL"
@@ -144,13 +152,18 @@ token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admi
 curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
 echo "$GREEN" "[OK]" "$NORMAL"
 
+echo -n " enabling HRM"
+token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
+echo "$GREEN" "[OK]" "$NORMAL"
+
 #echo " enabling scanning engine"
 #curl -k --user admin:$password "https://$dtr_server/api/v0/meta/settings" -X POST -H 'Content-Type: application/json;charset=utf-8' -d "{\"disableBackupWarning\": true,\"scanningEnabled\":true,\"scanningSyncOnline\": true}" > /dev/null 2>&1
 
 
 echo -n " updating nodes with DTR's CA "
 #Add DTR CA to all the nodes (ALL):
-pdsh -l root -w $node_list "curl -sk https://$dtr_server/ca -o /etc/pki/ca-trust/source/anchors/$dtr_server.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
+pdsh -l root -w $node_list "curl -sk https://dtr.shirtmullet.com/ca -o /etc/pki/ca-trust/source/anchors/dtr.shirtmullet.com.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 
@@ -195,8 +208,11 @@ echo -n " killing it all "
 #doctl
 for i in $(awk '{print $2}' hosts.txt); do doctl compute droplet delete --force $i; done
 for i in $(awk '{print $1}' hosts.txt); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-for i in $(doctl compute domain records list shirtmullet.com|grep 'pets\|admin\|flask\|ucp\|dtr'|awk '{print $1}'); do doctl compute domain records delete shirtmullet.com $i; done
-doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
+for i in $(doctl compute domain records list shirtmullet.com|grep 'pets\|admin\|flask\|ucp\|dtr\|suntrust'|awk '{print $1}'); do doctl compute domain records delete shirtmullet.com $i; done
+
+if [ "$(doctl compute load-balancer list|grep lb1|wc -l| sed -e 's/^[[:space:]]*//')" = "1" ]; then
+ doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
+fi
 
 rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar
 echo "$GREEN" "[OK]" "$NORMAL"
