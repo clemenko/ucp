@@ -2,7 +2,7 @@
 ###################################
 # edit vars
 ###################################
-set -eu
+set -e
 num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
@@ -69,7 +69,7 @@ echo "$GREEN" "[OK]" "$NORMAL"
 sleep 30
 
 echo -n " starting ucp server "
-ssh rancher@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com" > /dev/null 2>&1
+ssh rancher@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com --disable-usage --disable-tracking" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -130,9 +130,12 @@ token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admi
 curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
 echo "$GREEN" "[OK]" "$NORMAL"
 
-echo -n " adding load balancer for worker nodes - this can take a minute or two "
-doctl compute load-balancer create --name lb1 --region $zone --algorithm least_connections --sticky-sessions type:none --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 --health-check protocol:tcp,port:80 --droplet-ids $(doctl compute droplet list|grep -v ID|sed -n 2,4p |awk '{printf $1","}'|sed 's/.$//') > /dev/null 2>&1;
-echo "$GREEN" "[OK]" "$NORMAL"
+echo " enabling scanning engine"
+curl -X POST --user admin:$password -h "Content-Type: application/json" -h "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" "https://$dtr_server/api/v0/meta/settings"
+
+#echo -n " adding load balancer for worker nodes - this can take a minute or two "
+#doctl compute load-balancer create --name lb1 --region $zone --algorithm least_connections --sticky-sessions type:none --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 --health-check protocol:tcp,port:80 --droplet-ids $(doctl compute droplet list|grep -v ID|sed -n 2,4p |awk '{printf $1","}'|sed 's/.$//') > /dev/null 2>&1;
+#echo "$GREEN" "[OK]" "$NORMAL"
 
 
 echo ""

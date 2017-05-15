@@ -2,7 +2,7 @@
 ###################################
 # edit vars
 ###################################
-set -eu
+set -e
 num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
@@ -12,7 +12,7 @@ key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 #image=centos-7-x64
 image=rancheros
 license_file="docker_subscription.lic"
-ee_url=$(cat url.env)
+ee_url=$(cat url.env)/centos
 doctl_TOKEN=$(cat ~/.config/doctl/config.yaml|awk '{print $2}')
 ucp_ver=latest
 
@@ -101,7 +101,7 @@ pdsh -l root -w $host_list 'echo -e "{ \"storage-driver\": \"overlay2\", \n  \"s
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " starting ucp server "
-ssh root@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com" > /dev/null 2>&1
+ssh root@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com --disable-usage --disable-tracking" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -162,8 +162,10 @@ token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admi
 curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
 echo "$GREEN" "[OK]" "$NORMAL"
 
-#echo " enabling scanning engine"
+echo " enabling scanning engine"
 #curl -k --user admin:$password "https://$dtr_server/api/v0/meta/settings" -X POST -H 'Content-Type: application/json;charset=utf-8' -d "{\"disableBackupWarning\": true,\"scanningEnabled\":true,\"scanningSyncOnline\": true}" > /dev/null 2>&1
+
+curl -X POST --user admin:$password -h "Content-Type: application/json" -h "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" "https://$dtr_server/api/v0/meta/settings"
 
 
 echo -n " updating nodes with DTR's CA "
@@ -182,9 +184,9 @@ echo "$GREEN" "[OK]" "$NORMAL"
 #    --cacert ${DOCKER_CERT_PATH}/ca.pem \
 #    ${UCP_URL}/info | jq "."
 
-echo -n " adding load balancer for worker nodes - this can take a minute or two "
-doctl compute load-balancer create --name lb1 --region $zone --algorithm least_connections --sticky-sessions type:none --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 --health-check protocol:tcp,port:80 --droplet-ids $(doctl compute droplet list|grep -v ID|sed -n 2,4p |awk '{printf $1","}'|sed 's/.$//') > /dev/null 2>&1;
-echo "$GREEN" "[OK]" "$NORMAL"
+#echo -n " adding load balancer for worker nodes - this can take a minute or two "
+#doctl compute load-balancer create --name lb1 --region $zone --algorithm least_connections --sticky-sessions type:none --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 --health-check protocol:tcp,port:80 --droplet-ids $(doctl compute droplet list|grep -v ID|sed -n 2,4p |awk '{printf $1","}'|sed 's/.$//') > /dev/null 2>&1;
+#echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " setting up minio "
 ssh root@$dtr_server 'chmod -R 777 /opt/; docker run -d -p 9000:9000 --name minio minio/minio server /opt' > /dev/null 2>&1
@@ -210,7 +212,7 @@ status
 function demo () {
   controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
   eval $(<env.sh)
-  
+
   echo -n " adding devop team with permission label"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
   team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.shirtmullet.com/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\"}" |jq -r .id)
