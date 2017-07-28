@@ -13,7 +13,6 @@ key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 image=rancheros
 license_file="docker_subscription.lic"
 ee_url=$(cat url.env)
-doctl_TOKEN=$(cat ~/.config/doctl/config.yaml|awk '{print $2}')
 ucp_ver=latest
 
 ######  NO MOAR EDITS #######
@@ -51,25 +50,23 @@ host_list=$(awk '{printf $1","}' hosts.txt|sed 's/,$//')
 controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
 dtr_server=$(sed -n 2p hosts.txt|awk '{printf $1}')
 dtr_node=$(sed -n 2p hosts.txt|awk '{printf $2}')
-hrm_server=$(sed -n 3p hosts.txt|awk '{printf $1}')
+app_node=$(sed -n 3p hosts.txt|awk '{printf $1}')
 
 echo -n " updating dns "
-curl -u "$doctl_TOKEN:" -X POST -H "Content-Type: application/json" -d '{"type":"A","name":"ucp","data":"'$controller1'","priority":null,"port":null,"ttl":300,"weight":null}' "https://api.digitalocean.com/v2/domains/shirtmullet.com/records" > /dev/null 2>&1
-
-curl -u "$doctl_TOKEN:" -X POST -H "Content-Type: application/json" -d '{"type":"A","name":"dtr","data":"'$dtr_server'","priority":null,"port":null,"ttl":300,"weight":null}' "https://api.digitalocean.com/v2/domains/shirtmullet.com/records" > /dev/null 2>&1
-
-#doctl compute domain records create shirtmullet.com --record-type A --record-name ucp --record-data $controller1 > /dev/null 2>&1
-#doctl compute domain records create shirtmullet.com --record-type A --record-name dtr --record-data $dtr_server > /dev/null 2>&1
-doctl compute domain records create shirtmullet.com --record-type A --record-name pets --record-data $hrm_server > /dev/null 2>&1
-doctl compute domain records create shirtmullet.com --record-type A --record-name admin --record-data $hrm_server > /dev/null 2>&1
-doctl compute domain records create shirtmullet.com --record-type A --record-name flask --record-data $hrm_server > /dev/null 2>&1
-doctl compute domain records create shirtmullet.com --record-type A --record-name suntrust --record-data $hrm_server > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name ucp --record-ttl 300 --record-data $controller1 > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name dtr --record-ttl 300 --record-data $dtr_server > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name app --record-ttl 300 --record-data $app_node > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type CNAME --record-name "*" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 sleep 30
 
+#echo -n " updating rancheros docker version"
+#pdsh -l rancher -w $host_list "sudo ros engine switch docker-17.05.0-ce"
+#echo "$GREEN" "[OK]" "$NORMAL"
+
 echo -n " starting ucp server "
-ssh rancher@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.shirtmullet.com --disable-usage --disable-tracking" > /dev/null 2>&1
+ssh rancher@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking" > /dev/null 2>&1
 echo "$GREEN" "[OK]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -111,9 +108,9 @@ unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$controller1/ca > ucp-ca.pem
 
 eval $(<env.sh)
-#docker run -it --rm docker/dtr install --ucp-url https://ucp.shirtmullet.com --ucp-node $dtr_node --dtr-external-url https://dtr.shirtmullet.com --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)" > /dev/null 2>&1
+#docker run -it --rm docker/dtr install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-ca "$(cat ucp-ca.pem)" > /dev/null 2>&1
 
-docker run -it --rm docker/dtr install --ucp-url https://ucp.shirtmullet.com --ucp-node $dtr_node --dtr-external-url https://dtr.shirtmullet.com --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
+docker run -it --rm docker/dtr install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
 
 
 #--nfs-storage-url nfs://$dtr_server/opt
@@ -125,13 +122,14 @@ token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admi
 curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
 echo "$GREEN" "[OK]" "$NORMAL"
 
-echo -n " enabling HRM"
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
-echo "$GREEN" "[OK]" "$NORMAL"
+#echo -n " enabling HRM"
+#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+#curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
+#echo "$GREEN" "[OK]" "$NORMAL"
 
 echo " enabling scanning engine"
-curl -X POST --user admin:$password -h "Content-Type: application/json" -h "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" "https://$dtr_server/api/v0/meta/settings"
+curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" "https://dtr.dockr.life/api/v0/meta/settings"  > /dev/null 2>&1
+echo "$GREEN" "[OK]" "$NORMAL"
 
 #echo -n " adding load balancer for worker nodes - this can take a minute or two "
 #doctl compute load-balancer create --name lb1 --region $zone --algorithm least_connections --sticky-sessions type:none --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 --health-check protocol:tcp,port:80 --droplet-ids $(doctl compute droplet list|grep -v ID|sed -n 2,4p |awk '{printf $1","}'|sed 's/.$//') > /dev/null 2>&1;
@@ -151,26 +149,26 @@ function demo () {
 
   echo -n " adding devops team with permission label"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.shirtmullet.com/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\"}" |jq -r .id)
+  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\"}" |jq -r .id)
 
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.shirtmullet.com/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "2"
+  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "2"
   echo "$GREEN" "[OK]" "$NORMAL"
 
   echo -n " adding developer team with permission label"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.shirtmullet.com/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\"}" |jq -r .id)
+  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\"}" |jq -r .id)
 
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.shirtmullet.com/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "1"
+  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "1"
   echo "$GREEN" "[OK]" "$NORMAL"
 
   echo -n " adding demo repos to DTR"
-  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.shirtmullet.com/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.shirtmullet.com/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.shirtmullet.com/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
   echo "$GREEN" "[OK]" "$NORMAL"
 
   echo -n " adding demo secret"
@@ -184,7 +182,7 @@ echo -n " killing it all "
 #doctl
 for i in $(awk '{print $2}' hosts.txt); do doctl compute droplet delete --force $i; done
 for i in $(awk '{print $1}' hosts.txt); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-for i in $(doctl compute domain records list shirtmullet.com|grep 'pets\|admin\|flask\|ucp\|dtr\|suntrust'|awk '{print $1}'); do doctl compute domain records delete shirtmullet.com $i; done
+for i in $(doctl compute domain records list dockr.life|grep 'app\|ucp\|dtr\|suntrust'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
 
 if [ "$(doctl compute load-balancer list|grep lb1|wc -l| sed -e 's/^[[:space:]]*//')" = "1" ]; then
  doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
@@ -202,11 +200,11 @@ function status () {
   doctl compute droplet list |grep $prefix
   echo ""
   echo "===== Dashboards ====="
-  echo " - UCP   : https://ucp.shirtmullet.com"
+  echo " - UCP   : https://ucp.dockr.life"
   echo " - username : admin"
   echo " - password : "$password
   echo ""
-  echo " - DTR   : https://dtr.shirtmullet.com"
+  echo " - DTR   : https://dtr.dockr.life"
   echo ""
   echo "===== Load Balancer ====="
   echo " - http://"$(doctl compute load-balancer list|grep -v ID|awk '{print $2}')" "
