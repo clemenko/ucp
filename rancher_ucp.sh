@@ -148,18 +148,18 @@ function demo () {
  eval $(<env.sh)
 
   echo -n " adding devops team with permission label"
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
   team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\"}" |jq -r .id)
 
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
   curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "2"
   echo "$GREEN" "[OK]" "$NORMAL"
 
   echo -n " adding developer team with permission label"
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
   team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\"}" |jq -r .id)
 
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
   curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "1"
   echo "$GREEN" "[OK]" "$NORMAL"
 
@@ -169,6 +169,20 @@ function demo () {
   curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+
+  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"prod_alpine\",\"shortDescription\": \"promoted from alpine\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  echo "$GREEN" "[OK]" "$NORMAL"
+
+
+  echo -n " adding a few users"
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim intern\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff sales\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
   echo "$GREEN" "[OK]" "$NORMAL"
 
   echo -n " adding demo secret"

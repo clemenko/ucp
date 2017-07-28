@@ -226,6 +226,17 @@ function demo () {
   curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
   echo "$GREEN" "[OK]" "$NORMAL"
 
+  echo -n " adding a few users"
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim intern\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff sales\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
+  echo "$GREEN" "[OK]" "$NORMAL"
+
   echo -n " adding demo secret"
   echo "greatest demo ever" | docker secret create -l com.docker.ucp.access.label=prod demo_title_v1 - > /dev/null 2>&1
   echo "$GREEN" "[OK]" "$NORMAL"
