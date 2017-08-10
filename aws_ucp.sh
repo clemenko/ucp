@@ -10,6 +10,7 @@ password=Pa22word
 license_file="docker_subscription.lic"
 ee_url=$(cat url.env)
 ucp_ver=latest
+#image=ami-13be557e
 
 ######  NO MOAR EDITS #######
 ################################# up ################################
@@ -20,7 +21,7 @@ NORMAL=$(tput sgr0)
 function build_aws () {
  uuid=$(uuidgen| awk -F"-" '{print $2}')
  echo -n " building : $prefix-$uuid "
- aws ec2 create-tags --resources $(aws ec2 run-instances --image-id ami-13be557e --count 1 --user-data $'#cloud-config\nhostname: '$prefix-$uuid --instance-type m4.large --key-name clemenko --subnet-id subnet-c6f1498e --security-group-ids sg-645e211a | jq -r ".Instances[0].InstanceId" ) --tags "Key=Name,Value=$prefix-$uuid"
+ aws ec2 create-tags --resources $(aws ec2 run-instances --image-id ami-cdc999b6 --count 1 --user-data $'#cloud-config\nhostname: '$prefix-$uuid --instance-type m4.large --key-name clemenko --subnet-id subnet-c6f1498e --security-group-ids sg-645e211a | jq -r ".Instances[0].InstanceId" ) --tags "Key=Name,Value=$prefix-$uuid"
  sleep 5
  echo "$GREEN" "[OK]" "$NORMAL"
 }
