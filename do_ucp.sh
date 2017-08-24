@@ -16,6 +16,7 @@ image=centos-7-x64
 license_file="docker_subscription.lic"
 ee_url=$(cat url.env)/centos
 ucp_ver=latest
+dtr_ver=latest
 
 minio=false # true will add the minio service for testing an s3 service.
 
@@ -41,7 +42,6 @@ doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.
 
 if [ "$image" = rancheros ]; then user=rancher; fi
 if [ "$image" = centos-7-x64 ]; then user=root; fi
-
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -72,7 +72,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " installing docker ee "
-  pdsh -l $user -w $host_list 'yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum -y install docker-ee; systemctl start docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding overlay storage driver "
@@ -91,25 +91,31 @@ echo $MGRTOKEN > manager_token.txt
 echo $WRKTOKEN > worker_token.txt
 echo "$GREEN" "[ok]" "$NORMAL"
 
-sleep 10
+sleep 60
+
+echo -n " downloading client bundle "
+AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
+curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://ucp.dockr.life/api/clientbundle -o bundle.zip
+unzip bundle.zip > /dev/null 2>&1
+curl -sk https://$controller1/ca > ucp-ca.pem
+eval $(<env.sh)
+echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " adding license "
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -k "https://$controller1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
-echo "$GREEN" "[ok]" "$NORMAL"
+#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+#curl -k "https://$controller1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
+#docker config create com.docker.license-0 docker_subscription.lic
+#docker service update --config-add source=com.docker.license-0,target=/etc/ucp/docker.lic ucp-agent
+echo "$RED" "[fix]" "$NORMAL"
 
 #echo " setting up mangers"
 #pdsh -l root -w $manager2,$manager3 "docker swarm join --token $MGRTOKEN $controller1:2377" > /dev/null 2>&1
 
 sleep 10
+
 echo -n " setting up nodes "
 node_list=$(sed -n 1,"$num"p hosts.txt|awk '{printf $1","}')
 pdsh -l $user -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
-echo "$GREEN" "[ok]" "$NORMAL"
-
-echo -n " downloading client bundle "
-AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$controller1/api/clientbundle -o bundle.zip
 echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 60
@@ -119,20 +125,16 @@ sleep 60
 #echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " installing DTR "
-unzip bundle.zip > /dev/null 2>&1
-curl -sk https://$controller1/ca > ucp-ca.pem
-
-eval $(<env.sh)
-docker run -it --rm docker/dtr install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
+docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
 #--nfs-storage-url nfs://$dtr_server/opt
 
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " disabling scheduling on controllers "
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
-echo "$GREEN" "[ok]" "$NORMAL"
+#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+#curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
+echo "$RED" "[fix]" "$NORMAL"
 
 echo -n " enabling HRM"
 token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
@@ -140,14 +142,14 @@ curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Conten
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo " enabling scanning engine"
-curl -k -X POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" > /dev/null 2>&1 
+curl -k -X POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true }" > /dev/null 2>&1
 
-if [ "$image" = centos-7-x64 ]; then
+if [ "$image" = fcentos-7-x64 ]; then
   echo -n " updating nodes with DTR's CA "
   #Add DTR CA to all the nodes (ALL):
   pdsh -l $user -w $node_list "curl -sk https://dtr.dockr.life/ca -o /etc/pki/ca-trust/source/anchors/dtr.dockr.life.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
-  echo "$GREEN" "[ok]" "$NORMAL"
 fi
+echo "$RED" "[fix]" "$NORMAL"
 
 #prometheus : https://github.com/docker/orca/blob/master/project/prometheus.md
 #docker run --rm -i -v $(pwd):/data -v ucp-metrics-inventory:/inventory -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml -p 9090:9090 prom/prometheus
@@ -192,20 +194,15 @@ function demo () {
   controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
   eval $(<env.sh)
 
-  echo -n " adding devop team with permission label"
+  echo -n " adding devops team"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\"}" |jq -r .id)
-
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "2"
+  curl -sk -X POST https://ucp.dockr.life/accounts/ -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"devops\",\"isOrg\":true}"
   echo "$GREEN" "[ok]" "$NORMAL"
 
-  echo -n " adding devop team with permission label"
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  team_id=$(curl -sk -X POST -H "Authorization: Bearer $token" 'https://ucp.dockr.life/enzi/v0/accounts/docker-datacenter/teams' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\"}" |jq -r .id)
 
+  echo -n " adding developers"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-  curl -k -X POST -H "Authorization: Bearer $token" "https://ucp.dockr.life/api/teamlabels/$team_id/prod" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -d "1"
+  curl -sk -X POST https://ucp.dockr.life/accounts/ -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\",\"isOrg\":true}"
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo repos to DTR"
@@ -233,17 +230,21 @@ function demo () {
 }
 ############################## destroy ################################
 function kill () {
-echo -n " killing it all "
-#doctl
-for i in $(awk '{print $2}' hosts.txt); do doctl compute droplet delete --force $i; done
-for i in $(awk '{print $1}' hosts.txt); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-for i in $(doctl compute domain records list dockr.life|grep 'ucp\|dtr\|app'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
 
-if [ "$(doctl compute load-balancer list|grep lb1|wc -l| sed -e 's/^[[:space:]]*//')" = "1" ]; then
- doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
+if [ -f hosts.txt ]; then
+  echo -n " killing it all "
+  for i in $(awk '{print $2}' hosts.txt); do doctl compute droplet delete --force $i; done
+  for i in $(awk '{print $1}' hosts.txt); do ssh-keygen -q -R $i > /dev/null 2>&1; done
+  for i in $(doctl compute domain records list dockr.life|grep 'ucp\|dtr\|app'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
+
+  if [ "$(doctl compute load-balancer list|grep lb1|wc -l| sed -e 's/^[[:space:]]*//')" = "1" ]; then
+   doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
+  fi
+
+  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar
+else
+  echo -n " no hosts file found "
 fi
-
-rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar
 echo "$GREEN" "[ok]" "$NORMAL"
 }
 
