@@ -290,36 +290,42 @@ function demo () {
 ################################ demo wipe ##############################
 function wipe () {
   #clean the demo stuff
-  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
 
-  echo -n " removing secrets"
-  for secret_id in $(curl -skX GET "https://ucp.dockr.life/secrets" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].ID); do
-     curl -skX DELETE "https://ucp.dockr.life/secrets/$secret_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-  done
-  echo "$GREEN" "[ok]" "$NORMAL"
+  if [ -f col_tmp ]; then
 
-  echo -n " removing grants"
-  echo "$GREEN" "[ok]" "$NORMAL"
+    token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
 
-  echo -n " removing users and organizations"
-  for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v admin|grep -v docker-datacenter); do
-    curl -skX DELETE "https://ucp.dockr.life/accounts/$user" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-  done
-  echo "$GREEN" "[ok]" "$NORMAL"
+    echo -n " removing secrets"
+    for secret_id in $(curl -skX GET "https://ucp.dockr.life/secrets" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].ID); do
+       curl -skX DELETE "https://ucp.dockr.life/secrets/$secret_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+    done
+    echo "$GREEN" "[ok]" "$NORMAL"
 
-  echo -n " removing collections"
-  for cols in $(cat col_tmp.txt); do
-     curl -skX DELETE "https://ucp.dockr.life/collections/$cols" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-  done
-  echo "$GREEN" "[ok]" "$NORMAL"
+    echo -n " removing grants"
+    echo "$GREEN" "[ok]" "$NORMAL"
 
-  echo -n " removing roles"
-  for role in $(curl -skX GET "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].id | grep -v -E '(fullcontrol|scheduler|none|viewonly|restrictedcontrol)'); do
-    curl -skX DELETE "https://ucp.dockr.life/roles/$role" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-  done
-  echo "$GREEN" "[ok]" "$NORMAL"
+    echo -n " removing users and organizations"
+    for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v admin|grep -v docker-datacenter); do
+      curl -skX DELETE "https://ucp.dockr.life/accounts/$user" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+    done
+    echo "$GREEN" "[ok]" "$NORMAL"
 
+    echo -n " removing collections"
+    for cols in $(cat col_tmp.txt); do
+       curl -skX DELETE "https://ucp.dockr.life/collections/$cols" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+    done
+    rm -rf col_tmp.txt
+    echo "$GREEN" "[ok]" "$NORMAL"
 
+    echo -n " removing roles"
+    for role in $(curl -skX GET "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].id | grep -v -E '(fullcontrol|scheduler|none|viewonly|restrictedcontrol)'); do
+      curl -skX DELETE "https://ucp.dockr.life/roles/$role" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+    done
+    echo "$GREEN" "[ok]" "$NORMAL"
+  else
+    echo -n " looks like nothing to remove"
+    echo "$GREEN" "[ok]" "$NORMAL"
+  fi
 }
 
 
