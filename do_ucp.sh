@@ -203,36 +203,41 @@ function demo () {
 
   curl -sk -X POST https://ucp.dockr.life/accounts/ -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"orcabank\",\"isOrg\":true}" > /dev/null 2>&1
 
-  sre_org_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"sre\",\"description\":\"sre team of awesomeness\"}") | jq -r .id
+  ops_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"ops\",\"description\":\"ops team of awesomeness\"}" | jq -r .id)
 
-  dev_org_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"developers\",\"description\":\"dev team of awesomeness\"}") | jq -r .id
+  mobile_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"mobile\",\"description\":\"dev team of awesomeness\"}" | jq -r .id)
 
-  secops_org_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"secops\",\"description\":\"secops team of awesomeness\"}") | jq -r .id
+  payments_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"payments\",\"description\":\"dev team of awesomeness\"}" | jq -r .id)
+
+  security_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"security\",\"description\":\"security team of awesomeness\"}" | jq -r .id)
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
   curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim sre\"}"
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim ops\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff secops\"}"
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff security\"}"
 
   curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users to teams"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/sre/members/tim" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ops/members/tim" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/secops/members/jeff" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/security/members/jeff" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/developers/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/mobile/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/payments/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding developer role"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  dev_role_id=$(curl -skX POST "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"developer\",\"system_role\": false,\"operations\": {\"Container\":{\"Container Attach\": [],\"Container Exec\": [],\"Container Logs\": [],\"Container View\": []},\"Service\": {\"Service Logs\": [],\"Service View\": [],\"Service View Tasks\":[]}}}")
+  dev_role_id=$(curl -skX POST "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"developer\",\"system_role\": false,\"operations\": {\"Container\":{\"Container Attach\": [],\"Container Exec\": [],\"Container Logs\": [],\"Container View\": []},\"Service\": {\"Service Logs\": [],\"Service View\": [],\"Service View Tasks\":[]}}}" | jq -r .id)
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding collections"
@@ -247,10 +252,24 @@ function demo () {
   shared_mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"mobile\",\"path\":\"/\",\"parent_id\": \"shared\"}" | jq -r .id)
 
   shared_payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"payments\",\"path\":\"/\",\"parent_id\": \"shared\"}" | jq -r .id)
+
+  #write id to a tmp file
+  echo $shared_payments_id > col_tmp.txt
+  echo $shared_mobile_id >> col_tmp.txt
+  echo $payments_id >> col_tmp.txt
+  echo $mobile_id >> col_tmp.txt
+  echo $prod_col_id >> col_tmp.txt
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding grants"
+  curl -skX PUT "https://ucp.dockr.life/collectionGrants/$security_team_id/$prod_col_id/viewonly" -H  "accept: application/json" -H  "Authorization: Bearer $token"
 
+  curl -skX PUT "https://ucp.dockr.life/collectionGrants/$ops_team_id/$prod_col_id/fullcontrol" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+
+  curl -skX PUT "https://ucp.dockr.life/collectionGrants/$payments_team_id/$payments_id/$dev_role_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+
+  curl -skX PUT "https://ucp.dockr.life/collectionGrants/$mobile_team_id/$mobile_id/$dev_role_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo repos to DTR "
@@ -271,8 +290,36 @@ function demo () {
 ################################ demo wipe ##############################
 function wipe () {
   #clean the demo stuff
-  echo -n " wipe wipe baby"
+  token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
+
+  echo -n " removing secrets"
+  for secret_id in $(curl -skX GET "https://ucp.dockr.life/secrets" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].ID); do
+     curl -skX DELETE "https://ucp.dockr.life/secrets/$secret_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+  done
   echo "$GREEN" "[ok]" "$NORMAL"
+
+  echo -n " removing grants"
+  echo "$GREEN" "[ok]" "$NORMAL"
+
+  echo -n " removing users and organizations"
+  for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v admin|grep -v docker-datacenter); do
+    curl -skX DELETE "https://ucp.dockr.life/accounts/$user" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+  done
+  echo "$GREEN" "[ok]" "$NORMAL"
+
+  echo -n " removing collections"
+  for cols in $(cat col_tmp.txt); do
+     curl -skX DELETE "https://ucp.dockr.life/collections/$cols" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+  done
+  echo "$GREEN" "[ok]" "$NORMAL"
+
+  echo -n " removing roles"
+  for role in $(curl -skX GET "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].id | grep -v -E '(fullcontrol|scheduler|none|viewonly|restrictedcontrol)'); do
+    curl -skX DELETE "https://ucp.dockr.life/roles/$role" -H  "accept: application/json" -H  "Authorization: Bearer $token"
+  done
+  echo "$GREEN" "[ok]" "$NORMAL"
+
+
 }
 
 
