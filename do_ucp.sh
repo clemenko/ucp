@@ -29,6 +29,12 @@ GREEN=$(tput setaf 2)
 NORMAL=$(tput sgr0)
 
 function up () {
+
+if [ -f hosts.txt ]; then
+  echo "$RED" "Warning - cluster already detected..." "$NORMAL"
+  exit
+fi
+
 export PDSH_RCMD_TYPE=ssh
 build_list=""
 uuid=""
@@ -281,7 +287,7 @@ function demo () {
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo secret"
-  curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"Data\":\"Z3JlYXRlc3QgZGVtbyBldmVyCg==\",\"Labels\":{\"com.docker.ucp.access.label\":\"/prod\",\"com.docker.ucp.collection\": \"$prod_col_id\"},\"Name\":\"demo_title_v1\"}" > /dev/null 2>&1
+  curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"Data\":\"Z3JlYXRlc3QgZGVtbyBldmVyCg==\",\"Labels\":{\"com.docker.ucp.access.label\":\"/prod\"},\"Name\":\"demo_title_v1\"}" > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -291,7 +297,7 @@ function demo () {
 function wipe () {
   #clean the demo stuff
 
-  if [ -f col_tmp ]; then
+  if [ -f col_tmp.txt ]; then
 
     token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
 
@@ -305,7 +311,7 @@ function wipe () {
     echo "$GREEN" "[ok]" "$NORMAL"
 
     echo -n " removing users and organizations"
-    for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v admin|grep -v docker-datacenter); do
+    for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v -E '(admin|docker-datacenter)'); do
       curl -skX DELETE "https://ucp.dockr.life/accounts/$user" -H  "accept: application/json" -H  "Authorization: Bearer $token"
     done
     echo "$GREEN" "[ok]" "$NORMAL"
