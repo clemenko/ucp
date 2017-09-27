@@ -217,6 +217,8 @@ function demo () {
 
   security_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"security\",\"description\":\"security team of awesomeness\"}" | jq -r .id)
 
+  ci_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"ci\",\"description\":\"ci team of awesomeness\"}" | jq -r .id)
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users"
@@ -228,6 +230,8 @@ function demo () {
   curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff security\"}"
 
   curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
+
+  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"gitlab\",\"password\":\"Pa22word\",\"first_name\":\"gitlab ci\"}"
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users to teams"
@@ -239,6 +243,9 @@ function demo () {
   curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/mobile/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
 
   curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/payments/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ci/members/gitlab" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding developer role"
