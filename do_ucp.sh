@@ -13,14 +13,14 @@ key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 image=centos-7-x64
 #image=rancheros
 
-license_file="docker_subscription.lic"
-ee_url=$(cat url.env)/centos
 ucp_ver=latest
 dtr_ver=latest
 
 minio=false # true will add the minio service for testing an s3 service.
 
 loadbalancer=false
+
+storageos=false
 
 ######  NO MOAR EDITS #######
 ################################# up ################################
@@ -30,12 +30,26 @@ NORMAL=$(tput sgr0)
 
 function up () {
 
+if [ -f docker_subscription.lic ]; then
+  license_file="docker_subscription.lic"
+else
+  echo "$RED" "Warning - docker license file missing..." "$NORMAL"
+  exit
+fi
+
+if [ -f url.env ]; then
+  ee_url=$(cat url.env)/centos
+else
+  echo "$RED" "Warning - docker ee url.env file missing..." "$NORMAL"
+  exit
+fi
+
+
 if [ -f hosts.txt ]; then
   echo "$RED" "Warning - cluster already detected..." "$NORMAL"
   exit
 fi
 
-export PDSH_RCMD_TYPE=ssh
 build_list=""
 uuid=""
 for i in $(seq 1 $num); do
@@ -72,6 +86,7 @@ doctl compute domain records create dockr.life --record-type A --record-name ucp
 doctl compute domain records create dockr.life --record-type A --record-name dtr --record-ttl 300 --record-data $dtr_server > /dev/null 2>&1
 doctl compute domain records create dockr.life --record-type A --record-name app --record-ttl 300 --record-data $worker > /dev/null 2>&1
 doctl compute domain records create dockr.life --record-type CNAME --record-name "*" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type CNAME --record-name "gitlab" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -85,6 +100,12 @@ if [ "$image" = centos-7-x64 ]; then
   pdsh -l $user -w $host_list 'echo -e "{ \"storage-driver\": \"overlay2\", \n  \"storage-opts\": [\"overlay2.override_kernel_check=true\"]\n}" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
+
+if [ "$image" = rancheros ]; then
+  echo "rancher all the things"
+  #pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.06.1-ce'
+fi
+
 
 echo -n " starting ucp server "
 ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking" > /dev/null 2>&1
@@ -101,7 +122,7 @@ sleep 60
 
 echo -n " downloading client bundle "
 AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://$controller1/auth/login | jq -r .auth_token)
-curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://ucp.dockr.life/api/clientbundle -o bundle.zip
+curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$controller1/api/clientbundle -o bundle.zip
 unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$controller1/ca > ucp-ca.pem
 eval $(<env.sh)
@@ -145,6 +166,10 @@ echo -n " disabling scheduling on controllers "
 #curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
 echo "$RED" "[fix]" "$NORMAL"
 
+echo -n " configuring garbage collection"
+curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{\"action\": \"gc\",\"schedule\": \"0 0 1 * * 0\",\"retries\": 0,\"deadline\": \"\",\"stopTimeout\": \"30s\"}" "https://dtr.dockr.life/api/v0/crons"
+echo "$GREEN" "[ok]" "$NORMAL"
+
 echo -n " enabling HRM"
 token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
 curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
@@ -187,10 +212,11 @@ if [ "$minio" = true ]; then
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
-#echo " adding certificates"
+echo " adding certificates"
 #token=$(curl -sk "https://ucp.dockr.life/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
 
 #curl -sk 'https://ucp.dockr.life/api/nodes/certs' -H 'accept-encoding: gzip, deflate, br' -H "authorization: Bearer $token" -H 'accept: application/json, text/plain, */*' --data-binary '{"ca":"-----BEGIN CERTIFICATE-----\nMIICKDCCAc6gAwIBAgIUTCPedoVlUIG+2pUhQEG6zxmnByYwCgYIKoZIzj0EAwIw\nEzERMA8GA1UEAxMIc3dhcm0tY2EwHhcNMTcwMzI5MTQwMTAwWhcNMjcwMzI3MTQw\nMTAwWjCBjjEJMAcGA1UEBhMAMQkwBwYDVQQIEwAxCTAHBgNVBAcTADFKMEgGA1UE\nChNBT3JjYTogTkFXSTpJSkpJOlFPRlE6NkdUMjpCRU1UOjVLR0Q6SEVQMzpSNkJX\nOlpYV1A6Q1lLTDpXQVVCOldTWEcxDzANBgNVBAsTBkNsaWVudDEOMAwGA1UEAxMF\nYWRtaW4wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAT5AK9rPTEyGc1rO3wydLxQ\n0gRoicBIIwXtVDFYC1A96OIRWO4o9Fj1Va9zTzFbtfg/jsIyAWviNJ1eJ/bG2uN4\no4GDMIGAMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDAjAMBgNV\nHRMBAf8EAjAAMB0GA1UdDgQWBBRlRH+HUuNWtIcw3jfifH/6DfX8jDAfBgNVHSME\nGDAWgBSbY517jcS1ZuH6+3H9l23mVW1Q6zALBgNVHREEBDACgQAwCgYIKoZIzj0E\nAwIDSAAwRQIgQGM9SnOSFbKGVDBy05e1ei9k3YFLb//q1x4CCSgcbcACIQD3YJsb\nNo8+bldNwrbUYOWxOaUIicVmUiVyk/0ejXsbQQ==\n-----END CERTIFICATE-----\n","key":"server3","cert":"server2"}' --compressed
+echo "$RED" "[fix]" "$NORMAL"
 
 echo ""
 echo "========= UCP install complete ========="
@@ -286,11 +312,17 @@ function demo () {
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo repos to DTR "
+
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream nginx\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo secret"
@@ -349,7 +381,7 @@ if [ -f hosts.txt ]; then
   echo -n " killing it all "
   for i in $(awk '{print $2}' hosts.txt); do doctl compute droplet delete --force $i; done
   for i in $(awk '{print $1}' hosts.txt); do ssh-keygen -q -R $i > /dev/null 2>&1; done
-  for i in $(doctl compute domain records list dockr.life|grep 'ucp\|dtr\|app'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
+  for i in $(doctl compute domain records list dockr.life|grep 'ucp\|dtr\|app\|gitlab'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
 
   if [ "$(doctl compute load-balancer list|grep lb1|wc -l| sed -e 's/^[[:space:]]*//')" = "1" ]; then
    doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
