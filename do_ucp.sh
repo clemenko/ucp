@@ -65,7 +65,7 @@ if [ "$image" = centos-7-x64 ]; then user=root; fi
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
-sleep 10
+sleep 15
 
 echo -n " checking for ssh"
 for ext in $(awk '{print $1}' hosts.txt); do
@@ -102,8 +102,8 @@ if [ "$image" = centos-7-x64 ]; then
 fi
 
 if [ "$image" = rancheros ]; then
-  echo "rancher all the things"
-  #pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.06.1-ce'
+  echo "updating rancher with the latest engine"
+  pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.06.1-ce' > /dev/null 2>&1
 fi
 
 
@@ -167,7 +167,7 @@ echo -n " disabling scheduling on controllers "
 echo "$RED" "[fix]" "$NORMAL"
 
 echo -n " configuring garbage collection"
-curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{\"action\": \"gc\",\"schedule\": \"0 0 1 * * 0\",\"retries\": 0,\"deadline\": \"\",\"stopTimeout\": \"30s\"}" "https://dtr.dockr.life/api/v0/crons"
+curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{\"action\": \"gc\",\"schedule\": \"0 0 1 * * 0\",\"retries\": 0,\"deadline\": \"\",\"stopTimeout\": \"30s\"}" "https://dtr.dockr.life/api/v0/crons"  > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " enabling HRM"
@@ -313,13 +313,13 @@ function demo () {
 
   echo -n " adding demo repos to DTR "
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask build\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"upstream private\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream nginx\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
