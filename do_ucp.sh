@@ -93,7 +93,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding overlay storage driver "
@@ -249,15 +249,15 @@ function demo () {
 
   echo -n " adding users"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
+  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim ops\"}"
+  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim ops\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff security\"}"
+  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff security\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
+  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
 
-  curl -skX POST 'https://ucp.dockr.life/api/accounts' -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"gitlab\",\"password\":\"Pa22word\",\"first_name\":\"gitlab ci\"}"
+  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"gitlab\",\"password\":\"Pa22word\",\"first_name\":\"gitlab ci\"}"
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users to teams"
