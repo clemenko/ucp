@@ -11,3 +11,4 @@ beta*
 url.env
 certs/
 aws*
+kube.yml

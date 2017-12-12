@@ -10,8 +10,9 @@ zone=nyc1
 size=2gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 
-image=centos-7-x64
+#image=centos-7-x64
 #image=rancheros
+image=coreos-stable
 
 ucp_ver=latest
 dtr_ver=latest
@@ -62,6 +63,7 @@ doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.
 
 if [ "$image" = rancheros ]; then user=rancher; fi
 if [ "$image" = centos-7-x64 ]; then user=root; fi
+if [ "$image" = coreos-stable ]; then user=core; fi
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -105,7 +107,6 @@ if [ "$image" = rancheros ]; then
   echo "updating rancher with the latest engine"
   pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.06.1-ce' > /dev/null 2>&1
 fi
-
 
 echo -n " starting ucp server "
 ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking" > /dev/null 2>&1
