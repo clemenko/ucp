@@ -12,9 +12,9 @@ size=s-1vcpu-3gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
 
-image=centos-7-x64
+#image=centos-7-x64
 #image=rancheros
-#image=coreos-stable
+image=coreos-stable
 
 ucp_ver=latest
 dtr_ver=latest
@@ -95,7 +95,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf sysctl -p ' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding overlay storage driver "
@@ -314,20 +314,20 @@ function demo () {
 
   echo -n " adding demo repos to DTR "
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask build\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX PUT -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask build\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX PUT -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX PUT -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"upstream private\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX PUT -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"upstream private\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream nginx\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX PUT -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream nginx\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo secret"
-  curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"Data\":\"Z3JlYXRlc3QgZGVtbyBldmVyCg==\",\"Labels\":{\"com.docker.ucp.access.label\":\"/prod\"},\"Name\":\"demo_title_v1\"}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"Data\":\"Z3JlYXRlc3QgZGVtbyBldmVyCg==\",\"Labels\":{\"com.docker.ucp.access.label\":\"/prod\"},\"Name\":\"demo_title_v1\"}" > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
