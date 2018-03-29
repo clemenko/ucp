@@ -12,3 +12,4 @@ url.env
 certs/
 aws*
 kube.yml
+*.toml
