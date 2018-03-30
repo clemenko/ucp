@@ -176,6 +176,12 @@ token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admi
 #curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
 echo "$RED" "[OFF]" "$NORMAL"
 
+echo -n " increasing DTR worker count"
+worker_id=$(curl -skX GET -u admin:$password "https://dtr.dockr.life/api/v0/workers/" -H "accept: application/json" | jq -r .workers[0].id)
+curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/workers/$worker_id/capacity" -H "accept: application/json" -H "content-type: application/json" -d "{ \"capacityMap\": { \"scan\": 2, \"scanCheck\": 2 }}" > /dev/null 2>&1
+echo "$GREEN" "[ok]" "$NORMAL"
+
+
 echo " enabling scanning engine"
 curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true, \"scanningEnableAutoRecheck\": true }" > /dev/null 2>&1
 
