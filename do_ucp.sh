@@ -256,15 +256,16 @@ function demo () {
 
   echo -n " adding users"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"bob\",\"password\":\"Pa22word\",\"first_name\":\"bob developer\"}"
 
-  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"tim\",\"password\":\"Pa22word\",\"first_name\":\"tim ops\"}"
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{  \"fullName\": \"tim ops\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"tim\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"jeff\",\"password\":\"Pa22word\",\"first_name\":\"jeff security\"}"
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{  \"fullName\": \"bob developer\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"bob\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"andy\",\"password\":\"Pa22word\",\"first_name\":\"andy admin\"}"
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"jeff security\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"jeff\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/api/accounts -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d  "{\"role\":1,\"username\":\"gitlab\",\"password\":\"Pa22word\",\"first_name\":\"gitlab ci\"}"
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"andy admin\",  \"isActive\": true,  \"isAdmin\": true,  \"isOrg\": false,  \"name\": \"andy\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"gitlab ci\",  \"isActive\": true,  \"isAdmin\": true,  \"isOrg\": false,  \"name\": \"gitlab\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users to teams"
