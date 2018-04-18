@@ -12,9 +12,9 @@ size=s-1vcpu-3gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
 
-#image=centos-7-x64
+image=centos-7-x64
 #image=rancheros
-image=coreos-stable
+#image=coreos-stable
 
 ucp_ver=latest
 dtr_ver=latest
@@ -67,7 +67,7 @@ doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
-sleep 15
+sleep 25
 
 echo -n " checking for ssh "
 for ext in $(awk '{print $1}' hosts.txt); do
@@ -95,11 +95,11 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding overlay storage driver "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"storage-driver\": \"overlay2\", \n \"storage-opts\": [\"overlay2.override_kernel_check=true\"], \n \"log-driver\": \"json-file\", \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"log-driver\": \"json-file\", \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -109,7 +109,7 @@ if [ "$image" = rancheros ]; then
 fi
 
 echo -n " starting ucp server "
-ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking" > /dev/null 2>&1
+ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -126,17 +126,12 @@ AUTHTOKEN=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://
 curl -sk -H "Authorization: Bearer $AUTHTOKEN" https://$controller1/api/clientbundle -o bundle.zip
 unzip bundle.zip > /dev/null 2>&1
 curl -sk https://$controller1/ca > ucp-ca.pem
-eval $(<env.sh) > /dev/null 2>&1
+eval "$(<env.sh)" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " adding license "
-#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -k "https://$controller1/api/config/license" -X POST -H "Authorization: Bearer $token" -d "{\"auto_refresh\":true,\"license_config\":$(cat $license_file |jq .)}"
 docker config create com.docker.license-1 $license_file > /dev/null 2>&1
 docker service update --config-add source=com.docker.license-1,target=/etc/ucp/docker.lic ucp-agent --detach=false > /dev/null 2>&1
-
-
-# docker run -it --rm --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:2.2.2 install --admin-username admin --admin-password docker123 --host-address 172.245.1.52 --controller-port 4443 --disable-tracking --disable-usage --san ucp.demo.mac --san 172.245.1.52 --san 10.1.2.3 --license "$(cat /Users/mbentley/Downloads/docker_subscription.lic)"
 echo "$GREEN" "[ok]" "$NORMAL"
 
 #echo " setting up mangers"
@@ -151,9 +146,9 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 60
 
-#echo -n " building nfs server for dtr "
-#ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
-#echo "$GREEN" "[ok]" "$NORMAL"
+echo -n " building nfs server for dtr "
+ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
+echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " installing DTR "
 docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
@@ -162,19 +157,26 @@ docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.dockr.life
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 echo "$GREEN" "[ok]" "$NORMAL"
 
+echo -n " enabling Routing Mesh"
+token=$(curl -sk "https://ucp.dockr.life/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+curl -skX POST "https://ucp.dockr.life/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64"}'
+echo "$GREEN" "[ok]" "$NORMAL"
+
 echo -n " disabling scheduling on controllers "
 #token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
 #curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
+
+#CURRENT_CONFIG_NAME=$(docker service inspect ucp-agent --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{if eq "/etc/ucp/ucp.toml" .File.Name}}{{.ConfigName}}{{end}}{{end}}')
+#docker config inspect --format '{{ printf "%s" .Spec.Data }}' $CURRENT_CONFIG_NAME > ucp-config.toml
+#sed -i '' 's/enable_user_ucp_scheduling = true/enable_user_ucp_scheduling = false/g' ucp-config.toml
+#NEXT_CONFIG_NAME=${CURRENT_CONFIG_NAME%%-*}-$((${CURRENT_CONFIG_NAME##*-}+1))
+#docker config create $NEXT_CONFIG_NAME  ucp-config.toml
+#docker service update --config-rm $CURRENT_CONFIG_NAME --config-add source=$NEXT_CONFIG_NAME,target=/etc/ucp/ucp.toml ucp-agent
 echo "$RED" "[fix]" "$NORMAL"
 
 echo -n " configuring garbage collection"
 curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{\"action\": \"gc\",\"schedule\": \"0 0 1 * * 0\",\"retries\": 0,\"deadline\": \"\",\"stopTimeout\": \"30s\"}" "https://dtr.dockr.life/api/v0/crons"  > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
-
-echo -n " enabling HRM"
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -k --user admin:$password "https://$controller1/api/hrm" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d "{\"HTTPPort\":80,\"HTTPSPort\":8443}"
-echo "$RED" "[OFF]" "$NORMAL"
 
 echo -n " increasing DTR worker count"
 worker_id=$(curl -skX GET -u admin:$password "https://dtr.dockr.life/api/v0/workers/" -H "accept: application/json" | jq -r .workers[0].id)
@@ -186,21 +188,11 @@ echo -n " enabling scanning engine"
 curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true, \"scanningEnableAutoRecheck\": true }" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
-if [ "$image" = centos-7-x64 ]; then
-  echo -n " updating nodes with DTR's CA "
+#if [ "$image" = centos-7-x64 ]; then
+#  echo -n " updating nodes with DTR's CA "
   #Add DTR CA to all the nodes (ALL):
-  pdsh -l $user -w $node_list "curl -sk https://dtr.dockr.life/ca -o /etc/pki/ca-trust/source/anchors/dtr.dockr.life.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
-fi
-
-#prometheus : https://github.com/docker/orca/blob/master/project/prometheus.md
-#docker run --rm -i -v $(pwd):/data -v ucp-metrics-inventory:/inventory -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml -p 9090:9090 prom/prometheus
-
-#curl notes
-#curl \
-#    --cert ${DOCKER_CERT_PATH}/cert.pem \
-#    --key ${DOCKER_CERT_PATH}/key.pem \
-#    --cacert ${DOCKER_CERT_PATH}/ca.pem \
-#    ${UCP_URL}/info | jq "."
+#  pdsh -l $user -w $node_list "curl -sk https://dtr.dockr.life/ca -o /etc/pki/ca-trust/source/anchors/dtr.dockr.life.crt; update-ca-trust; systemctl restart docker" > /dev/null 2>&1
+#fi
 
 if [ "$loadbalancer" = true ]; then
   echo -n " adding load balancer for worker nodes - this can take a minute or two "
@@ -218,12 +210,6 @@ if [ "$minio" = true ]; then
  echo $min_secret > min_secret.txt
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
-
-echo -n " adding certificates"
-#token=$(curl -sk "https://ucp.dockr.life/auth/login" -X POST -d '{"username":"admin","password":"Pa22word"}'|jq -r .auth_token)
-
-#curl -sk 'https://ucp.dockr.life/api/nodes/certs' -H 'accept-encoding: gzip, deflate, br' -H "authorization: Bearer $token" -H 'accept: application/json, text/plain, */*' --data-binary '{"ca":"-----BEGIN CERTIFICATE-----\nMIICKDCCAc6gAwIBAgIUTCPedoVlUIG+2pUhQEG6zxmnByYwCgYIKoZIzj0EAwIw\nEzERMA8GA1UEAxMIc3dhcm0tY2EwHhcNMTcwMzI5MTQwMTAwWhcNMjcwMzI3MTQw\nMTAwWjCBjjEJMAcGA1UEBhMAMQkwBwYDVQQIEwAxCTAHBgNVBAcTADFKMEgGA1UE\nChNBT3JjYTogTkFXSTpJSkpJOlFPRlE6NkdUMjpCRU1UOjVLR0Q6SEVQMzpSNkJX\nOlpYV1A6Q1lLTDpXQVVCOldTWEcxDzANBgNVBAsTBkNsaWVudDEOMAwGA1UEAxMF\nYWRtaW4wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAT5AK9rPTEyGc1rO3wydLxQ\n0gRoicBIIwXtVDFYC1A96OIRWO4o9Fj1Va9zTzFbtfg/jsIyAWviNJ1eJ/bG2uN4\no4GDMIGAMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDAjAMBgNV\nHRMBAf8EAjAAMB0GA1UdDgQWBBRlRH+HUuNWtIcw3jfifH/6DfX8jDAfBgNVHSME\nGDAWgBSbY517jcS1ZuH6+3H9l23mVW1Q6zALBgNVHREEBDACgQAwCgYIKoZIzj0E\nAwIDSAAwRQIgQGM9SnOSFbKGVDBy05e1ei9k3YFLb//q1x4CCSgcbcACIQD3YJsb\nNo8+bldNwrbUYOWxOaUIicVmUiVyk/0ejXsbQQ==\n-----END CERTIFICATE-----\n","key":"server3","cert":"server2"}' --compressed
-echo "$RED" "[fix]" "$NORMAL"
 
 echo ""
 echo "========= UCP install complete ========="
@@ -438,7 +424,7 @@ if [ -f hosts.txt ]; then
    doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
   fi
 
-  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar
+  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml ucp-config.toml
 else
   echo -n " no hosts file found "
 fi
