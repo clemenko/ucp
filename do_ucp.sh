@@ -49,7 +49,6 @@ else
   exit
 fi
 
-
 if [ -f hosts.txt ]; then
   echo "$RED" "Warning - cluster already detected..." "$NORMAL"
   exit
@@ -105,7 +104,7 @@ fi
 
 if [ "$image" = rancheros ]; then
   echo "updating rancher with the latest engine"
-  pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.06.1-ce' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.12.1-ce' > /dev/null 2>&1
 fi
 
 echo -n " starting ucp server "
