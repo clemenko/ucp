@@ -129,7 +129,7 @@ eval "$(<env.sh)" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " updating task history"
-docker swarm update --task-history-limit=1
+docker swarm update --task-history-limit=1 > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " adding license "
