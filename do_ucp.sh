@@ -128,6 +128,10 @@ curl -sk https://$controller1/ca > ucp-ca.pem
 eval "$(<env.sh)" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
+echo -n " updating task history"
+docker swarm update --task-history-limit=1
+echo "$GREEN" "[ok]" "$NORMAL"
+
 echo -n " adding license "
 docker config create com.docker.license-1 $license_file > /dev/null 2>&1
 docker service update --config-add source=com.docker.license-1,target=/etc/ucp/docker.lic ucp-agent --detach=false > /dev/null 2>&1
