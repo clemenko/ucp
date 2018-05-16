@@ -8,7 +8,8 @@ prefix=ddc
 password=Pa22word
 zone=nyc1
 #size=2gb
-size=s-1vcpu-3gb
+#size=s-1vcpu-3gb
+size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
 
