@@ -7,15 +7,12 @@ num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc1
-#size=2gb
-#size=s-1vcpu-3gb
 size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
 
-image=centos-7-x64
-#image=rancheros
-#image=coreos-stable
+#image=centos-7-x64
+image=rancheros
 
 ucp_ver=latest
 dtr_ver=latest
@@ -31,7 +28,6 @@ NORMAL=$(tput sgr0)
 
 if [ "$image" = rancheros ]; then user=rancher; fi
 if [ "$image" = centos-7-x64 ]; then user=root; fi
-if [ "$image" = coreos-stable ]; then user=core; fi
 
 ################################# up ################################
 function up () {
@@ -67,7 +63,7 @@ doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
-sleep 25
+sleep 60
 
 echo -n " checking for ssh "
 for ext in $(awk '{print $1}' hosts.txt); do
@@ -104,8 +100,9 @@ if [ "$image" = centos-7-x64 ]; then
 fi
 
 if [ "$image" = rancheros ]; then
-  echo "updating rancher with the latest engine"
+  echo " updating to the latest engine"
   pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.12.1-ce' > /dev/null 2>&1
+  sleep 5
 fi
 
 echo -n " starting ucp server "
@@ -150,9 +147,11 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 60
 
-echo -n " building nfs server for dtr "
-ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
-echo "$GREEN" "[ok]" "$NORMAL"
+if [ "$image" = centos-7-x64 ]; then
+  echo -n " building nfs server for dtr "
+  ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
+fi
 
 echo -n " installing DTR "
 docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.dockr.life --ucp-node $dtr_node --dtr-external-url https://dtr.dockr.life --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
@@ -162,8 +161,8 @@ curl -sk https://$dtr_server/ca > dtr-ca.pem
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " enabling Routing Mesh"
-token=$(curl -sk "https://ucp.dockr.life/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -skX POST "https://ucp.dockr.life/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64"}'
+token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+curl -skX POST "https://$controller1//api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64"}'
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " disabling scheduling on controllers "
@@ -474,3 +473,12 @@ case "$1" in
         demo) demo;;
         *) echo "Usage: $0 {up|kill|add|demo|wipe|status}"; exit 1
 esac
+
+
+#aws example if you want to switch.
+#aws elb register-instances-with-load-balancer --load-balancer-name clemenko-ucp-akamai --instances $(cat hosts.txt|sed -n '1p;2p;3p'|awk '{printf $3" "}') > /dev/null 2>&1
+#
+#aws ec2 describe-instances --filters "Name=tag:Name,Values=$prefix*" | jq -c '.Reservations[].Instances[] |[.PublicIpAddress, (.Tags[]|select(.Key=="Name")|.Value), .InstanceId, .PrivateIpAddress, .State.Name]'|jq -r '@csv'|sed -e 's/"//g' -e 's/,/   /g'|grep -v terminated|grep -v shutting-down|sort -n|awk '{print $1"   "$2"   "$3"  "$4}' > hosts.txt
+#
+#aws ec2 create-tags --resources $(aws ec2 run-instances --image-id ami-cdc999b6 --count 1 --user-data $'#cloud-config\nhostname: '$prefix-$uuid --instance-type m4.large --key-name clemenko --subnet-id subnet-c6f1498e --security-group-ids sg-645e211a | jq -r ".Instances[0].InstanceId" ) --tags "Key=Name,Value=$prefix-$uuid"
+#
