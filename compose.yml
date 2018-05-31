@@ -1,0 +1,14 @@
+version: "3.4"
+services:
+  app:
+    image: nginx:alpine
+    ports:
+      - 5000:80
+
+    secrets:
+      - source: today
+        target: today
+
+secrets:
+  today:
+    external: true
