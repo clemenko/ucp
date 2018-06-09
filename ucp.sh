@@ -18,11 +18,11 @@ ucp_ver=latest
 dtr_ver=latest
 engine_ver=docker-ee
 #-17.06.2.ee.13-2.1.rc1.el7.centos
-#docker-ee-17.06.2.ee.13.rc1
 
 minio=false # true will add the minio service for testing an s3 service.
 loadbalancer=false
 storageos=false
+nfs=false
 
 ######  NO MOAR EDITS #######
 RED=$(tput setaf 1)
@@ -94,11 +94,11 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-test-17.06; yum -y install '"$engine_ver"'; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' 
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install '"$engine_ver"'; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"log-driver\": \"json-file\", \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -148,9 +148,9 @@ node_list=$(sed -n 1,"$num"p hosts.txt|awk '{printf $1","}')
 pdsh -l $user -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
-sleep 60
+sleep 75
 
-if [ "$image" = centos-7-x64 ]; then
+if [ "$nfs" = true ]; then
   echo -n " building nfs server for dtr "
   ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
@@ -170,7 +170,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " disabling scheduling on controllers "
 #token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d "{\"enable_admin_ucp_scheduling\":true,\"enable_user_ucp_scheduling\":false}"
+#curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d '{"enable_admin_ucp_scheduling":true,"enable_user_ucp_scheduling":false}'
 
 #CURRENT_CONFIG_NAME=$(docker service inspect ucp-agent --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{if eq "/etc/ucp/ucp.toml" .File.Name}}{{.ConfigName}}{{end}}{{end}}')
 #docker config inspect --format '{{ printf "%s" .Spec.Data }}' $CURRENT_CONFIG_NAME > ucp-config.toml
@@ -181,17 +181,17 @@ echo -n " disabling scheduling on controllers "
 echo "$RED" "[fix]" "$NORMAL"
 
 echo -n " configuring garbage collection"
-curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d "{\"action\": \"gc\",\"schedule\": \"0 0 1 * * 0\",\"retries\": 0,\"deadline\": \"\",\"stopTimeout\": \"30s\"}" "https://dtr.dockr.life/api/v0/crons"  > /dev/null 2>&1
+curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"action": "gc","schedule": "0 0 1 * * 0","retries": 0,"deadline": "","stopTimeout": "30s"}' "https://dtr.dockr.life/api/v0/crons"  > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " increasing DTR worker count"
 worker_id=$(curl -skX GET -u admin:$password "https://dtr.dockr.life/api/v0/workers/" -H "accept: application/json" | jq -r .workers[0].id)
-curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/workers/$worker_id/capacity" -H "accept: application/json" -H "content-type: application/json" -d "{ \"capacityMap\": { \"scan\": 2, \"scanCheck\": 2 }}" > /dev/null 2>&1
+curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/workers/$worker_id/capacity" -H "accept: application/json" -H "content-type: application/json" -d '{ "capacityMap": { "scan": 2, "scanCheck": 2 }}' > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 
 echo -n " enabling scanning engine"
-curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d "{ \"reportAnalytics\": false, \"anonymizeAnalytics\": false, \"disableBackupWarning\": true, \"scanningEnabled\": true, \"scanningSyncOnline\": true, \"scanningEnableAutoRecheck\": true }" > /dev/null 2>&1
+curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d '{ "reportAnalytics": false, "anonymizeAnalytics": false, "disableBackupWarning": true, "scanningEnabled": true, "scanningSyncOnline": true, "scanningEnableAutoRecheck": true }' > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 #if [ "$image" = centos-7-x64 ]; then
@@ -232,65 +232,65 @@ function demo () {
   echo -n " adding organizations and teams"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token) > /dev/null 2>&1
 
-  curl -sk -X POST https://ucp.dockr.life/accounts/ -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"orcabank\",\"isOrg\":true}" > /dev/null 2>&1
+  curl -sk -X POST https://ucp.dockr.life/accounts/ -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"orcabank","isOrg":true}' > /dev/null 2>&1
 
-  ops_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"ops\",\"description\":\"ops team of awesomeness\"}" | jq -r .id)
+  ops_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"ops","description":"ops team of awesomeness"}' | jq -r .id)
 
-  mobile_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"mobile\",\"description\":\"dev team of awesomeness\"}" | jq -r .id)
+  mobile_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"mobile","description":"dev team of awesomeness"}' | jq -r .id)
 
-  payments_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"payments\",\"description\":\"dev team of awesomeness\"}" | jq -r .id)
+  payments_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"payments","description":\dev team of awesomeness"}' | jq -r .id)
 
-  security_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"security\",\"description\":\"security team of awesomeness\"}" | jq -r .id)
+  security_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"security","description":"security team of awesomeness"}' | jq -r .id)
 
-  ci_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d "{\"name\":\"ci\",\"description\":\"ci team of awesomeness\"}" | jq -r .id)
+  ci_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"ci","description":"ci team of awesomeness"}' | jq -r .id)
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
 
-  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{  \"fullName\": \"tim ops\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"tim\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{  "fullName": "tim ops",  "isActive": true,  "isAdmin": false,  "isOrg": false,  "name": "tim",  "password": "Pa22word",  "searchLDAP": false}' > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{  \"fullName\": \"bob developer\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"bob\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{  "fullName": "bob developer",  "isActive": true,  "isAdmin": false,  "isOrg": false,  "name": "bob",  "password": "Pa22word",  "searchLDAP": false}' > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"jeff security\",  \"isActive\": true,  \"isAdmin\": false,  \"isOrg\": false,  \"name\": \"jeff\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d '{  "fullName": "jeff security",  "isActive": true,  "isAdmin": false,  "isOrg": false,  "name": "jeff",  "password": "Pa22word",  "searchLDAP": false}' > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"andy admin\",  \"isActive\": true,  \"isAdmin\": true,  \"isOrg\": false,  \"name\": \"andy\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d '{  "fullName": "andy admin",  "isActive": true,  "isAdmin": true,  "isOrg": false,  "name": "andy",  "password": "Pa22word",  "searchLDAP": false}' > /dev/null 2>&1
 
-  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d "{  \"fullName\": \"gitlab ci\",  \"isActive\": true,  \"isAdmin\": true,  \"isOrg\": false,  \"name\": \"gitlab\",  \"password\": \"Pa22word\",  \"searchLDAP\": false}" > /dev/null 2>&1
+  curl -skX POST https://ucp.dockr.life/accounts/ -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json"  -d '{  "fullName": "gitlab ci",  "isActive": true,  "isAdmin": true,  "isOrg": false,  "name": "gitlab",  "password": "Pa22word",  "searchLDAP": false}' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding users to teams"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ops/members/tim" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ops/members/tim" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{}' > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/security/members/jeff" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/security/members/jeff" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{}' > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/mobile/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/mobile/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{}' > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/payments/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/payments/members/bob" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{}' > /dev/null 2>&1
 
-  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ci/members/gitlab" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{}" > /dev/null 2>&1
+  curl -skX PUT "https://ucp.dockr.life/accounts/orcabank/teams/ci/members/gitlab" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{}' > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding developer role"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-  dev_role_id=$(curl -skX POST "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"developer\",\"system_role\": false,\"operations\": {\"Container\":{\"Container Attach\": [],\"Container Exec\": [],\"Container Logs\": [],\"Container View\": []},\"Service\": {\"Service Logs\": [],\"Service View\": [],\"Service View Tasks\":[]}}}" | jq -r .id)
+  dev_role_id=$(curl -skX POST "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"developer","system_role": false,"operations": {"Container":{"Container Attach": [],"Container Exec": [],"Container Logs": [],"Container View": []},"Service": {"Service Logs": [],"Service View": [],"Service View Tasks":[]}}}' | jq -r .id)
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding collections"
   token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
 
-  prod_col_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"prod\",\"path\":\"/\",\"parent_id\": \"swarm\"}" | jq -r .id)
+  prod_col_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"prod","path":"/","parent_id": "swarm"}' | jq -r .id)
 
-  mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"mobile\",\"path\":\"/prod\",\"parent_id\": \"$prod_col_id\"}" | jq -r .id)
+  mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"mobile","path":"/prod","parent_id": "'$prod_col_id'"}' | jq -r .id)
 
-  payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"payments\",\"path\":\"/prod\",\"parent_id\": \"$prod_col_id\"}" | jq -r .id)
+  payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"payments","path":"/prod","parent_id": '"$prod_col_id"'}' | jq -r .id)
 
-  shared_mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"mobile\",\"path\":\"/\",\"parent_id\": \"shared\"}" | jq -r .id)
+  shared_mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"mobile","path":"/","parent_id": "shared"}' | jq -r .id)
 
-  shared_payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"name\":\"payments\",\"path\":\"/\",\"parent_id\": \"shared\"}" | jq -r .id)
+  shared_payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"payments","path":"/","parent_id": "shared"}' | jq -r .id)
 
   #write id to a tmp file
   echo $shared_payments_id > col_tmp.txt
@@ -313,24 +313,24 @@ function demo () {
 
   echo -n " adding demo repos to DTR "
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask_build\",\"shortDescription\": \"custom flask build\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask_build","shortDescription": "custom flask build","longDescription": "the best damm custom flask app ever", "enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"flask\",\"shortDescription\": \"custom flask\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask","shortDescription": "custom flask","longDescription": "the best damm custom flask app ever","enableManifestLists": true, "immutableTags": true, "visibility": "public","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine\",\"shortDescription\": \"upstream\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"public\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine","shortDescription": "upstream","longDescription": "upstream from hub.docker.com","visibility": "public","enableManifestLists": true, "immutableTags": true,"scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"alpine_build\",\"shortDescription\": \"upstream private\",\"longDescription\": \"the best damm custom flask app ever\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine_build","shortDescription": "upstream private","longDescription": "the best damm custom flask app ever","enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\": \"nginx\",\"shortDescription\": \"upstream nginx\",\"longDescription\": \"upstream from hub.docker.com\",\"visibility\": \"private\",\"scanOnPush\": true }" "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "nginx","shortDescription": "upstream nginx","longDescription": "upstream from hub.docker.com","enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding promotion policy for admin/flask_build"
-  curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/flask_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d "{ \"enabled\": true, \"rules\": [ { \"field\": \"vulnerability_critical\", \"operator\": \"lte\", \"values\": [ \"0\" ] } ], \"tagTemplate\": \"string\", \"targetRepository\": \"admin/flask\"}" > /dev/null 2>&1
+  curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/flask_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d '{ "enabled": true, "rules": [ { "field": "vulnerability_critical", "operator": "lte", "values": [ "0" ] } ], "tagTemplate": "%n", "targetRepository": "admin/flask"}' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
 
   echo -n " adding demo secret"
-  curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d "{\"Data\":\"Z3JlYXRlc3QgZGVtbyBldmVyCg==\",\"Labels\":{\"com.docker.ucp.access.label\":\"/prod\"},\"Name\":\"demo_title_v1\"}" > /dev/null 2>&1
+  curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"Data":"Z3JlYXRlc3QgZGVtbyBldmVyCg==","Labels":{"com.docker.ucp.access.label":"/prod"},"Name":"demo_title_v1"}' > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -402,7 +402,7 @@ function add () {
     echo "$GREEN" "[ok]" "$NORMAL"
 
     echo -n " adding overlay storage driver "
-    pdsh -l $user -w $add_ip 'echo -e "{ \"storage-driver\": \"overlay2\", \n  \"storage-opts\": [\"overlay2.override_kernel_check=true\"], \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
+    pdsh -l $user -w $add_ip 'echo -e "{ "storage-driver": "overlay2", \n  "storage-opts": ["overlay2.override_kernel_check=true"], \n "metrics-addr" : "0.0.0.0:9323", \n "experimental" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
     echo "$GREEN" "[ok]" "$NORMAL"
   fi
 
