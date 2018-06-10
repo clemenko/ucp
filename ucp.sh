@@ -286,7 +286,7 @@ function demo () {
 
   mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"mobile","path":"/prod","parent_id": "'$prod_col_id'"}' | jq -r .id)
 
-  payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"payments","path":"/prod","parent_id": '"$prod_col_id"'}' | jq -r .id)
+  payments_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"payments","path":"/prod","parent_id": "'$prod_col_id'"}' | jq -r .id)
 
   shared_mobile_id=$(curl -skX POST "https://ucp.dockr.life/collections" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"name":"mobile","path":"/","parent_id": "shared"}' | jq -r .id)
 
@@ -325,7 +325,7 @@ function demo () {
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding promotion policy for admin/flask_build"
-  curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/flask_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d '{ "enabled": true, "rules": [ { "field": "vulnerability_critical", "operator": "lte", "values": [ "0" ] } ], "tagTemplate": "%n", "targetRepository": "admin/flask"}' > /dev/null 2>&1
+  curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/flask_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d '{ "enabled": true, "rules": [ { "field": "vulnerability_critical", "operator": "lte", "values": [ "10" ] } ], "tagTemplate": "%n", "targetRepository": "admin/flask"}' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
 
