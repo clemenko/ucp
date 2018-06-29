@@ -16,13 +16,13 @@ image=centos-7-x64
 
 ucp_ver=latest
 dtr_ver=latest
-engine_ver=docker-ee
-#-17.06.2.ee.13-2.1.rc1.el7.centos
+engine_repo=docker-ee-stable-17.06
+#docker-ee-stable-18.03
 
-minio=false # true will add the minio service for testing an s3 service.
+minio=true # true will add the minio service for testing an s3 service.
 loadbalancer=false
 storageos=false
-nfs=false
+nfs=true
 
 ######  NO MOAR EDITS #######
 RED=$(tput setaf 1)
@@ -94,7 +94,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 if [ "$image" = centos-7-x64 ]; then
 
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable docker-ee-stable-17.06; yum -y install '"$engine_ver"'; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
@@ -129,7 +129,7 @@ curl -sk https://$controller1/ca > ucp-ca.pem
 eval "$(<env.sh)" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
-echo -n " updating task history"
+echo -n " updating task history "
 docker swarm update --task-history-limit=1 > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -143,7 +143,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 30
 
-echo -n " setting up nodes "
+echo -n " adding nodes to the cluster "
 node_list=$(sed -n 1,"$num"p hosts.txt|awk '{printf $1","}')
 pdsh -l $user -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
@@ -214,6 +214,13 @@ if [ "$minio" = true ]; then
  echo $min_access > min_access.txt
  min_secret=$(ssh $user@$dtr_server "docker logs minio |grep SecretKey |awk '{print \$2}'")
  echo $min_secret > min_secret.txt
+
+ min_token=$(curl -sk 'http://dtr.dockr.life:9000/minio/webrpc' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -d '{"id":1,"jsonrpc":"2.0","params":{"username":"'$min_access'","password":"'$min_secret'"},"method":"Web.Login"}' --compressed | jq -r .result.token)
+ 
+ curl -sk 'http://dtr.dockr.life:9000/minio/webrpc' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -H "Authorization: Bearer $min_token"  --data-binary '{"id":1,"jsonrpc":"2.0","params":{"bucketName":"dtr"},"method":"Web.MakeBucket"}' --compressed
+
+ curl -skX PUT -u admin:$password 'https://dtr.dockr.life/api/v0/admin/settings/registry/simple' -H 'content-type: application/json' -d '{"storage":{"delete":{"enabled":true},"maintenance":{"readonly":{"enabled":false}},"s3":{"v4auth":true,"secure":true,"skipverify":false,"regionendpoint":"http://dtr.dockr.life:9000","bucket":"dtr","rootdirectory":"/","secretkey":"'$min_secret'","region":"us-east-1","accesskey":"'$min_access'"}}}' 
+
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -238,7 +245,7 @@ function demo () {
 
   mobile_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"mobile","description":"dev team of awesomeness"}' | jq -r .id)
 
-  payments_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"payments","description":\dev team of awesomeness"}' | jq -r .id)
+  payments_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"payments","description":"dev team of awesomeness"}' | jq -r .id)
 
   security_team_id=$(curl -sk -X POST https://ucp.dockr.life/accounts/orcabank/teams -H "Authorization: Bearer $token" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d '{"name":"security","description":"security team of awesomeness"}' | jq -r .id)
 
@@ -313,19 +320,22 @@ function demo () {
 
   echo -n " adding demo repos to DTR "
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask_build","shortDescription": "custom flask build","longDescription": "the best damm custom flask app ever", "enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask_build","shortDescription": "custom flask build","longDescription": "the best damm custom flask app ever", "enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask","shortDescription": "custom flask","longDescription": "the best damm custom flask app ever","enableManifestLists": true, "immutableTags": true, "visibility": "public","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "flask","shortDescription": "custom flask","longDescription": "the best damm custom flask app ever","enableManifestLists": false, "immutableTags": false, "visibility": "public","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine","shortDescription": "upstream","longDescription": "upstream from hub.docker.com","visibility": "public","enableManifestLists": true, "immutableTags": true,"scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine","shortDescription": "upstream","longDescription": "upstream from hub.docker.com","visibility": "public","enableManifestLists": false, "immutableTags": false,"scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine_build","shortDescription": "upstream private","longDescription": "the best damm custom flask app ever","enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine_build","shortDescription": "upstream private","longDescription": "the best damm custom flask app ever","enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
-  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "nginx","shortDescription": "upstream nginx","longDescription": "upstream from hub.docker.com","enableManifestLists": true, "immutableTags": true,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "nginx","shortDescription": "upstream nginx","longDescription": "upstream from hub.docker.com","enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding promotion policy for admin/flask_build"
   curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/flask_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d '{ "enabled": true, "rules": [ { "field": "vulnerability_critical", "operator": "lte", "values": [ "10" ] } ], "tagTemplate": "%n", "targetRepository": "admin/flask"}' > /dev/null 2>&1
+
+  curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/alpine_build/promotionPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d '{ "enabled": true, "rules": [ { "field": "vulnerability_critical", "operator": "lte", "values": [ "0" ] } ], "tagTemplate": "%n", "targetRepository": "admin/alpine"}' > /dev/null 2>&1
+
   echo "$GREEN" "[ok]" "$NORMAL"
 
 
@@ -459,7 +469,7 @@ function status () {
   fi
 
   if [ "$minio" = true ]; then
-   echo " - Minio : http://$dtr_server:9000"
+   echo " - Minio : http://dtr.dockr.life:9000"
    echo " - Access key : $(cat min_access.txt)"
    echo " - Secret key : $(cat min_secret.txt)"
    echo ""
