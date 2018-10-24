@@ -13,6 +13,7 @@ license_file="docker_subscription.lic"
 
 image=centos-7-x64
 #image=rancheros
+#image=ubuntu-16-04-x64
 
 ucp_ver=latest
 dtr_ver=latest
@@ -31,6 +32,9 @@ NORMAL=$(tput sgr0)
 
 if [ "$image" = rancheros ]; then user=rancher; fi
 if [ "$image" = centos-7-x64 ]; then user=root; fi
+
+if ! $(which -s curl); then echo "$RED" " ** Curl was not found. Please install before preceeding. ** " "$NORMAL" ; fi
+if ! $(which -s jq); then echo "$RED" " ** Jq was not found. Please install before preceeding. ** " "$NORMAL" ; fi
 
 ################################# up ################################
 function up () {
@@ -57,7 +61,8 @@ fi
 build_list=""
 uuid=""
 for i in $(seq 1 $num); do
- uuid=$(uuidgen| awk -F"-" '{print $2}')
+ #uuid=$(uuidgen| awk -F"-" '{print $2}')
+ uuid=$(uuid| awk -F"-" '{print $5}'|cut -c-4)
  build_list="$prefix-$uuid $build_list"
 done
 echo -n " building vms : $build_list "
@@ -87,7 +92,7 @@ doctl compute domain records create dockr.life --record-type A --record-name ucp
 doctl compute domain records create dockr.life --record-type A --record-name dtr --record-ttl 300 --record-data $dtr_server > /dev/null 2>&1
 doctl compute domain records create dockr.life --record-type A --record-name app --record-ttl 300 --record-data $worker > /dev/null 2>&1
 doctl compute domain records create dockr.life --record-type CNAME --record-name "*" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
-doctl compute domain records create dockr.life --record-type CNAME --record-name "gitlab" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
+#doctl compute domain records create dockr.life --record-type CNAME --record-name "gitlab" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -104,7 +109,7 @@ fi
 
 if [ "$image" = rancheros ]; then
   echo " updating to the latest engine"
-  pdsh -l $user -w $host_list 'sudo ros engine switch docker-17.12.1-ce' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'sudo ros engine switch docker-18.03.1-ce' > /dev/null 2>&1
   sleep 5
 fi
 
@@ -208,11 +213,7 @@ fi
 
 if [ "$minio" = true ]; then
   echo -n " setting up minio "
-
-  #ssh $user@$dtr_server "chmod -R 777 /opt/; docker run -d -p 9000:9000 -e MINIO_ACCESS_KEY=admin -e MINIO_SECRET_KEY=$password minio/minio server /opt" > /dev/null 2>&1
-
-  ssh $user@$dtr_server "chmod -R 777 /opt/; docker run -d -p 9000:9000 minio/minio server /opt" > /dev/null 2>&1
-
+  ssh $user@$dtr_server "chmod -R 777 /opt/; docker run --name minio -d -p 9000:9000 minio/minio server /opt" > /dev/null 2>&1
   sleep 5
 
   min_access=$(ssh $user@$dtr_server "docker logs minio |grep AccessKey |awk '{print \$2}'")
