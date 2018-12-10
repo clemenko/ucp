@@ -13,12 +13,11 @@ license_file="docker_subscription.lic"
 
 image=centos-7-x64
 #image=rancheros
-#image=ubuntu-16-04-x64
+#image=ubuntu-18-04-x64
 
 ucp_ver=latest
 dtr_ver=latest
-#engine_repo=docker-ee-stable-17.06
-engine_repo=docker-ee-stable-18.09
+centos_engine_repo=docker-ee-stable
 
 minio=true # true will add the minio service for testing an s3 service.
 loadbalancer=false
@@ -32,7 +31,7 @@ NORMAL=$(tput sgr0)
 BLUE=$(tput setaf 4)
 
 if [ "$image" = rancheros ]; then user=rancher; fi
-if [ "$image" = centos-7-x64 ]; then user=root; fi
+if [ "$image" = centos-7-x64 ] || [ "$image" = ubuntu-18-04-x64 ]; then user=root; fi
 
 if ! $(which -s curl); then echo "$RED" " ** Curl was not found. Please install before preceeding. ** " "$NORMAL" ; fi
 if ! $(which -s jq); then echo "$RED" " ** Jq was not found. Please install before preceeding. ** " "$NORMAL" ; fi
@@ -103,7 +102,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 if [ "$image" = centos-7-x64 ]; then
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
@@ -115,6 +114,11 @@ if [ "$image" = rancheros ]; then
   echo " updating to the latest engine"
   pdsh -l $user -w $host_list 'sudo ros engine switch docker-18.06.1-ce' > /dev/null 2>&1
   sleep 5
+fi
+
+if [ "$image" = ubuntu-18-04-x64 ]; then
+pdsh -l $user -w $host_list 'apt update; export DEBIAN_FRONTEND=noninteractive; apt remove docker -y; apt -y upgrade; apt -y autoremove; apt install -y apt-transport-https ca-certificates curl software-properties-common; export DOCKER_EE_URL="'$ee_url'"; curl -fsSL "${DOCKER_EE_URL}/ubuntu/gpg" | apt-key add -; add-apt-repository "deb [arch=amd64] $DOCKER_EE_URL/ubuntu $(lsb_release -cs) stable"; apt update; apt -y install docker-ee'
+exit
 fi
 
 echo -n " starting ucp server "
@@ -223,7 +227,7 @@ if [ "$minio" = true ]; then
   min_secret=$(uuid -v4 | sed 's/-//g')
   echo $min_secret > min_secret.txt
 
-  ssh $user@$dtr_server "mkdir /opt/minio; chmod -R 777 /opt/minio; docker run -v /opt/minio/:/opt/:Z -e MINIO_ACCESS_KEY=$min_access -e MINIO_SECRET_KEY=$min_secret -d -p 9000:9000 minio/minio server /opt" > /dev/null 2>&1
+  ssh $user@$dtr_server "mkdir /opt/minio; chmod -R 777 /opt/minio; docker run -v /opt/minio/:/opt/:Z -e MINIO_ACCESS_KEY=$min_access -e MINIO_SECRET_KEY=$min_secret -d -p 9000:9000 --name minio minio/minio server /opt" > /dev/null 2>&1
   sleep 5
 
   min_token=$(curl -sk 'http://dtr.dockr.life:9000/minio/webrpc' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -d '{"id":1,"jsonrpc":"2.0","params":{"username":"'$min_access'","password":"'$min_secret'"},"method":"Web.Login"}' --compressed | jq -r .result.token)
