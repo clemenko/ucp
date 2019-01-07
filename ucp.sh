@@ -15,13 +15,17 @@ image=centos-7-x64
 #image=rancheros
 #image=ubuntu-18-04-x64
 
+#set true if you want k8s nodes by default
+k8s=true
+
+#versions
 ucp_ver=latest
 dtr_ver=latest
 centos_engine_repo=docker-ee-stable
 
 minio=true # true will add the minio service for testing an s3 service.
-loadbalancer=false
-storageos=false
+loadbalancer=false # expensive
+storageos=false # soon?
 nfs=false
 
 ######  NO MOAR EDITS #######
@@ -102,11 +106,11 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 if [ "$image" = centos-7-x64 ]; then
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; echo "vm.swappiness=0" >> /etc/sysctl.conf; echo "vm.overcommit_memory=1" >> /etc/sysctl.conf;  echo "net.ipv4.neigh.default.gc_thresh1 = 80000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh2 = 90000" >> /etc/sysctl.conf; echo "net.ipv4.neigh.default.gc_thresh3 = 100000" >> /etc/sysctl.conf; echo "net.ipv4.tcp_keepalive_time=600" >> /etc/sysctl.conf; echo "fs.may_detach_mounts=1" >> /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" >> /etc/sysctl.conf; echo "fs.inotify.max_user_watches=1048576" >> /etc/sysctl.conf;  sysctl -p ; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true \n}" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true, \n \"bip\": \"172.31.1.1/24\" \n }" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -156,6 +160,14 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 30
 
+if [ "$k8s" = true ]; then
+  echo -n " setting k8s as default for nodes "
+  curl -s --cacert ca.pem --cert cert.pem --key key.pem https://$controller1/api/ucp/config-toml > ucp-config.toml
+  sed -i.old '/default_node_orchestrator/s/swarm/kubernetes/' ucp-config.toml
+  curl -s --cacert ca.pem --cert cert.pem --key key.pem --upload-file ucp-config.toml  https://$controller1/api/ucp/config-toml  > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
+fi 
+
 echo -n " adding nodes to the cluster "
 node_list=$(sed -n 1,"$num"p hosts.txt|awk '{printf $1","}')
 pdsh -l $user -w $node_list "docker swarm join --token $WRKTOKEN $controller1:2377" > /dev/null 2>&1
@@ -180,18 +192,6 @@ echo -n " enabling Routing Mesh"
 token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
 curl -skX POST "https://$controller1//api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64"}'
 echo "$GREEN" "[ok]" "$NORMAL"
-
-echo -n " disabling scheduling on controllers "
-#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -k --user admin:$password "https://$controller1/api/config/scheduling" -X POST -H "Authorization: Bearer $token" -d '{"enable_admin_ucp_scheduling":true,"enable_user_ucp_scheduling":false}'
-
-#CURRENT_CONFIG_NAME=$(docker service inspect ucp-agent --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{if eq "/etc/ucp/ucp.toml" .File.Name}}{{.ConfigName}}{{end}}{{end}}')
-#docker config inspect --format '{{ printf "%s" .Spec.Data }}' $CURRENT_CONFIG_NAME > ucp-config.toml
-#sed -i '' 's/enable_user_ucp_scheduling = true/enable_user_ucp_scheduling = false/g' ucp-config.toml
-#NEXT_CONFIG_NAME=${CURRENT_CONFIG_NAME%%-*}-$((${CURRENT_CONFIG_NAME##*-}+1))
-#docker config create $NEXT_CONFIG_NAME  ucp-config.toml
-#docker service update --config-rm $CURRENT_CONFIG_NAME --config-add source=$NEXT_CONFIG_NAME,target=/etc/ucp/ucp.toml ucp-agent
-echo "$RED" "[fix]" "$NORMAL"
 
 echo -n " configuring garbage collection"
 curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"action": "gc","schedule": "0 0 1 * * 0","retries": 0,"deadline": "","stopTimeout": "30s"}' "https://dtr.dockr.life/api/v0/crons"  > /dev/null 2>&1
@@ -455,7 +455,7 @@ if [ -f hosts.txt ]; then
    doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
   fi
 
-  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml ucp-config.toml
+  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml *.toml*
 else
   echo -n " no hosts file found "
 fi
