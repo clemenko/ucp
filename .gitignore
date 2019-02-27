@@ -13,4 +13,4 @@ certs/
 aws*
 kube.yml
 *.toml
-tmp/
+pki/

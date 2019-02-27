@@ -3,7 +3,7 @@
 # edit vars
 ###################################
 set -e
-num=3 #3 or larger please!
+num=4 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc1
@@ -26,7 +26,7 @@ centos_engine_repo=docker-ee-stable
 minio=true # true will add the minio service for testing an s3 service.
 loadbalancer=false # expensive
 storageos=false # soon?
-nfs=false
+nfs=true
 
 ######  NO MOAR EDITS #######
 RED=$(tput setaf 1)
@@ -37,10 +37,12 @@ BLUE=$(tput setaf 4)
 if [ "$image" = rancheros ]; then user=rancher; fi
 if [ "$image" = centos-7-x64 ] || [ "$image" = ubuntu-18-04-x64 ]; then user=root; fi
 
-if ! $(which -s curl); then echo "$RED" " ** Curl was not found. Please install before preceeding. ** " "$NORMAL" ; fi
-if ! $(which -s jq); then echo "$RED" " ** Jq was not found. Please install before preceeding. ** " "$NORMAL" ; fi
-if ! $(which -s pdsh); then echo "$RED" " ** Pdsh was not found. Please install before preceeding. ** " "$NORMAL" ; fi
-if ! $(which -s uuid); then echo "$RED" " ** Uuid was not found. Please install before preceeding. ** " "$NORMAL" ; fi
+#better error checking
+command -v curl >/dev/null 2>&1 || { echo "$RED" " ** Curl was not found. Please install before preceeding. ** " "$NORMAL" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "$RED" " ** Jq was not found. Please install before preceeding. ** " "$NORMAL" >&2; exit 1; }
+command -v pdsh >/dev/null 2>&1 || { echo "$RED" " ** Pdsh was not found. Please install before preceeding. ** " "$NORMAL" >&2; exit 1; }
+command -v uuid >/dev/null 2>&1 || { echo "$RED" " ** Uuid was not found. Please install before preceeding. ** " "$NORMAL" >&2; exit 1; }
+
 
 ################################# up ################################
 function up () {
@@ -177,7 +179,7 @@ sleep 75
 
 if [ "$nfs" = true ]; then
   echo -n " building nfs server for dtr "
-  ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt *(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
+  ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt '$host_list'(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
