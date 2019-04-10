@@ -7,6 +7,7 @@ num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc1
+#size=s-4vcpu-8gb
 size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
@@ -55,7 +56,7 @@ else
 fi
 
 if [ -f url.env ]; then
-  ee_url=$(cat url.env)/centos
+  ee_url=$(cat url.env)
 else
   echo "$RED" "Warning - docker ee url.env file missing..." "$NORMAL"
   exit
@@ -108,7 +109,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 if [ "$image" = centos-7-x64 ]; then
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum install -y yum-utils; echo "'$ee_url'" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; docker plugin disable docker/telemetry:1.0.0.linux-x86_64-stable; systemctl enable docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum install -y yum-utils; echo "'$ee_url'/centos" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " updating kernel settings "
@@ -166,7 +167,7 @@ sysctl -p' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"}, \n \"metrics-addr\" : \"0.0.0.0:9323\", \n \"experimental\" : true, \n \"bip\": \"172.31.1.1/24\" \n }" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"} \n }" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -177,8 +178,9 @@ if [ "$image" = rancheros ]; then
 fi
 
 if [ "$image" = ubuntu-18-04-x64 ]; then
-pdsh -l $user -w $host_list 'apt update; export DEBIAN_FRONTEND=noninteractive; apt remove docker -y; apt -y upgrade; apt -y autoremove; apt install -y apt-transport-https ca-certificates curl software-properties-common; export DOCKER_EE_URL="'$ee_url'"; curl -fsSL "${DOCKER_EE_URL}/ubuntu/gpg" | apt-key add -; add-apt-repository "deb [arch=amd64] $DOCKER_EE_URL/ubuntu $(lsb_release -cs) stable"; apt update; apt -y install docker-ee'
-exit
+ echo -n " updating the os and installing docker ee "
+ pdsh -l $user -w $host_list 'apt update; export DEBIAN_FRONTEND=noninteractive; apt remove docker -y; apt install -y apt-transport-https ca-certificates curl software-properties-common; curl -fsSL "'$ee_url'/ubuntu/gpg" | apt-key add -; add-apt-repository "deb '$ee_url'/ubuntu $(lsb_release -cs) stable"; apt update; apt -y install docker-ee; systemctl start docker; systemctl enable docker' > /dev/null 2>&1
+ echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
 echo -n " starting ucp server "
@@ -231,7 +233,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 75
 
-if [ "$nfs" = true ]; then
+if [ "$nfs" = true ] && [ "$image" = centos-7-x64 ]; then
   echo -n " building nfs server for dtr "
   ssh root@$dtr_server 'chmod -R 777 /opt/; yum -y install nfs-utils; systemctl enable rpcbind nfs-server; systemctl start rpcbind nfs-server ; echo "/opt '$host_list'(rw,sync,no_root_squash,no_all_squash)" > /etc/exports; systemctl restart nfs-server' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
@@ -246,7 +248,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " enabling Routing Mesh"
 token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -skX POST "https://$controller1//api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64"}'
+curl -skX POST "https://$controller1/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64","InterlockEnabled": true}'
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " configuring garbage collection"
