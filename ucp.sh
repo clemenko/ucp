@@ -99,11 +99,11 @@ dtr_node=$(sed -n 2p hosts.txt|awk '{printf $2}')
 worker=$(sed -n 3p hosts.txt|awk '{printf $1}')
 
 echo -n " updating dns "
-doctl compute domain records create dockr.life --record-type A --record-name ucp --record-ttl 300 --record-data $controller1 > /dev/null 2>&1
-doctl compute domain records create dockr.life --record-type A --record-name dtr --record-ttl 300 --record-data $dtr_server > /dev/null 2>&1
-doctl compute domain records create dockr.life --record-type A --record-name app --record-ttl 300 --record-data $worker > /dev/null 2>&1
-doctl compute domain records create dockr.life --record-type CNAME --record-name "*" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
-#doctl compute domain records create dockr.life --record-type CNAME --record-name "gitlab" --record-ttl 300 --record-data app.dockr.life. > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name ucp --record-ttl 150 --record-data $controller1 > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name dtr --record-ttl 150 --record-data $dtr_server > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type A --record-name app --record-ttl 150 --record-data $worker > /dev/null 2>&1
+doctl compute domain records create dockr.life --record-type CNAME --record-name "*" --record-ttl 150 --record-data app.dockr.life. > /dev/null 2>&1
+#doctl compute domain records create dockr.life --record-type CNAME --record-name "gitlab" --record-ttl 150 --record-data app.dockr.life. > /dev/null 2>&1
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
