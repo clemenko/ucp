@@ -180,11 +180,14 @@ fi
 if [ "$image" = ubuntu-18-04-x64 ]; then
  echo -n " updating the os and installing docker ee "
  pdsh -l $user -w $host_list 'apt update; export DEBIAN_FRONTEND=noninteractive; apt remove docker -y; apt install -y apt-transport-https ca-certificates curl software-properties-common; curl -fsSL "'$ee_url'/ubuntu/gpg" | apt-key add -; add-apt-repository "deb '$ee_url'/ubuntu $(lsb_release -cs) stable"; apt update; apt -y install docker-ee; systemctl start docker; systemctl enable docker' > /dev/null 2>&1
+
+ # net.ipv4.conf.all.rp_filter=1
+ 
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
 echo -n " starting ucp server "
-ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
+ssh $user@$controller1 "docker run --rm -i --security-opt label=disable --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " getting tokens "
