@@ -27,7 +27,7 @@ centos_engine_repo=docker-ee-stable
 minio=true # true will add the minio service for testing an s3 service.
 loadbalancer=false # expensive
 storageos=false # soon?
-nfs=true
+nfs=false
 
 ######  NO MOAR EDITS #######
 RED=$(tput setaf 1)
@@ -167,7 +167,7 @@ sysctl -p' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": true, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"} \n }" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": false, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"} \n }" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -186,8 +186,9 @@ if [ "$image" = ubuntu-18-04-x64 ]; then
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
+# --security-opt label=disable
 echo -n " starting ucp server "
-ssh $user@$controller1 "docker run --rm -i --security-opt label=disable --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
+ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " getting tokens "
