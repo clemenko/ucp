@@ -7,8 +7,8 @@ num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc1
-#size=s-4vcpu-8gb
-size=s-2vcpu-4gb
+size=s-4vcpu-8gb
+#size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
 
@@ -167,7 +167,7 @@ sysctl -p' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding daemon configs "
-  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": false, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"} \n }" > /etc/docker/daemon.json; systemctl restart docker'
+  pdsh -l $user -w $host_list 'echo -e "{\n \"selinux-enabled\": false, \n \"log-driver\": \"json-file\", \n \"log-opts\": {\"max-size\": \"10m\", \"max-file\": \"3\"} \n}" > /etc/docker/daemon.json; systemctl restart docker'
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
@@ -423,47 +423,6 @@ function demo () {
 
 }
 
-################################ demo wipe ##############################
-function wipe () {
-  #clean the demo stuff
-
-  if [ -f col_tmp.txt ]; then
-
-    token=$(curl -sk -d '{"username":"admin","password":"'$password'"}' https://ucp.dockr.life/auth/login | jq -r .auth_token)
-
-    echo -n " removing secrets"
-    for secret_id in $(curl -skX GET "https://ucp.dockr.life/secrets" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].ID); do
-       curl -skX DELETE "https://ucp.dockr.life/secrets/$secret_id" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-    done
-    echo "$GREEN" "[ok]" "$NORMAL"
-
-    echo -n " removing grants"
-    echo "$GREEN" "[ok]" "$NORMAL"
-
-    echo -n " removing users and organizations"
-    for user in $(curl -skX GET "https://ucp.dockr.life/accounts/?filter=all&limit=100" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .accounts[].name|grep -v -E '(admin|docker-datacenter)'); do
-      curl -skX DELETE "https://ucp.dockr.life/accounts/$user" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-    done
-    echo "$GREEN" "[ok]" "$NORMAL"
-
-    echo -n " removing collections"
-    for cols in $(cat col_tmp.txt); do
-       curl -skX DELETE "https://ucp.dockr.life/collections/$cols" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-    done
-    rm -rf col_tmp.txt
-    echo "$GREEN" "[ok]" "$NORMAL"
-
-    echo -n " removing roles"
-    for role in $(curl -skX GET "https://ucp.dockr.life/roles" -H  "accept: application/json" -H  "Authorization: Bearer $token"| jq -r .[].id | grep -v -E '(fullcontrol|scheduler|none|viewonly|restrictedcontrol)'); do
-      curl -skX DELETE "https://ucp.dockr.life/roles/$role" -H  "accept: application/json" -H  "Authorization: Bearer $token"
-    done
-    echo "$GREEN" "[ok]" "$NORMAL"
-  else
-    echo -n " looks like nothing to remove"
-    echo "$GREEN" "[ok]" "$NORMAL"
-  fi
-}
-
 ############################## add node ################################
 function add () {
   controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
@@ -517,7 +476,7 @@ if [ -f hosts.txt ]; then
    doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
   fi
 
-  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml *.toml*
+  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml *.toml* *.dockercontext
 else
   echo -n " no hosts file found "
 fi
@@ -559,9 +518,8 @@ case "$1" in
         kill) kill;;
         add) add;;
         status) status;;
-        wipe ) wipe;;
         demo) demo;;
-        *) echo "Usage: $0 {up|kill|add|demo|wipe|status}"; exit 1
+        *) echo "Usage: $0 {up|kill|add|demo|status}"; exit 1
 esac
 
 
