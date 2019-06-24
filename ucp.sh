@@ -78,6 +78,8 @@ echo -n " building vms : $build_list "
 doctl compute droplet create $build_list --region $zone --image $image --size $size --ssh-keys $key --wait > /dev/null 2>&1
 doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.txt
 
+if [ $(cat hosts.txt |wc -l) = 0 ]; then echo Something went wrong...; exit ; fi
+
 #add gcloud
 
 echo "$GREEN" "[ok]" "$NORMAL"
@@ -109,12 +111,11 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 if [ "$image" = centos-7-x64 ]; then
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'/centos" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; systemctl enable docker; yum downgrade -y container-selinux-2.74-1.el7' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'/centos" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; systemctl enable docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " updating kernel settings "
   pdsh -l $user -w $host_list 'cat << EOF >> /etc/sysctl.conf
-
 # SWAP settings
 vm.swappiness=0
 vm.overcommit_memory=1
@@ -184,9 +185,8 @@ if [ "$image" = ubuntu-18-04-x64 ]; then
  echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
-# --security-opt label=disable
 echo -n " starting ucp server "
-ssh $user@$controller1 "docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
+ssh $user@$controller1 "docker run --rm -i --name ucp --security-opt label=disable -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.dockr.life --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " getting tokens "
@@ -404,6 +404,8 @@ function demo () {
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "alpine_build","shortDescription": "upstream private","longDescription": "the best damm custom flask app ever","enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
 
   curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "nginx","shortDescription": "upstream nginx","longDescription": "upstream from hub.docker.com","enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1
+
+  curl -skX POST -u admin:$password -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name": "simple","shortDescription": "upstream simple","longDescription": "upstream from hub.docker.com","enableManifestLists": false, "immutableTags": false,"visibility": "private","scanOnPush": true }' "https://dtr.dockr.life/api/v0/repositories/admin" > /dev/null 2>&1  
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding promotion policy for admin/flask_build"
@@ -413,6 +415,9 @@ function demo () {
 
   echo "$GREEN" "[ok]" "$NORMAL"
 
+  echo -n " adding mirroring policy for admin/simple"
+ # curl -skX POST -u admin:$password "https://dtr.dockr.life/api/v0/repositories/admin/simple/pollMirroringPolicies?initialEvaluation=true" -H "accept: application/json" -H "content-type: application/json" -d "{ \"enabled\": true, \"mirroringType\": \"poll\", \"password\": \"XXXXXX\", \"remoteCA\": \"string\", \"remoteHost\": \"https://index.docker.io\", \"remoteRepository\": \"clemenko/simple\", \"skipTLSVerification\": true, \"username\": \"clemenko\"}" > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " adding demo secret"
   curl -skX POST "https://ucp.dockr.life/secrets/create" -H  "accept: application/json" -H  "Authorization: Bearer $token" -H  "content-type: application/json" -d '{"Data":"Z3JlYXRlc3QgZGVtbyBldmVyCg==","Labels":{"com.docker.ucp.access.label":"/prod"},"Name":"demo_title_v1"}' > /dev/null 2>&1
