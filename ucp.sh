@@ -78,7 +78,7 @@ echo -n " building vms : $build_list "
 doctl compute droplet create $build_list --region $zone --image $image --size $size --ssh-keys $key --wait > /dev/null 2>&1
 doctl compute droplet list|grep -v ID|grep $prefix|awk '{print $3" "$2}'> hosts.txt
 
-if [ $(cat hosts.txt |wc -l) = 0 ]; then echo Something went wrong...; exit ; fi
+if [ $(cat hosts.txt |wc -l) = 0 ]; then echo Something went wrong...; rm -rf hosts.txt; exit ; fi
 
 #add gcloud
 
