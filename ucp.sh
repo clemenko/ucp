@@ -6,7 +6,7 @@ set -e
 num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
-zone=nyc3
+zone=nyc1
 #size=s-4vcpu-8gb
 size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
@@ -111,7 +111,7 @@ echo "$GREEN" "[ok]" "$NORMAL"
 
 if [ "$image" = centos-7-x64 ]; then
   echo -n " updating the os and installing docker ee "
-  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'/centos" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; systemctl enable docker; mkdir -p /etc/systemd/system/docker.service.d/; echo -e '[Service]\n  Environment="DOCKER_FIPS=1"' > /etc/systemd/system/docker.service.d/fips-module.conf; systemctl daemon-reload; systemctl restart docker' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'yum update -y; yum install -y yum-utils; echo "'$ee_url'/centos" > /etc/yum/vars/dockerurl; echo "7" > /etc/yum/vars/dockerosversion; yum-config-manager --add-repo $(cat /etc/yum/vars/dockerurl)/docker-ee.repo; yum makecache fast; yum-config-manager --enable '"$centos_engine_repo"'; yum -y install docker-ee; systemctl start docker; systemctl enable docker; mkdir -p /etc/systemd/system/docker.service.d/; echo -e "[Service]\n  Environment=\"DOCKER_FIPS=1\"" > /etc/systemd/system/docker.service.d/fips-module.conf; systemctl daemon-reload; systemctl restart docker' > /dev/null 2>&1
   echo "$GREEN" "[ok]" "$NORMAL"
 
   echo -n " updating kernel settings "
