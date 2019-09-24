@@ -6,7 +6,7 @@ set -e
 num=3 #3 or larger please!
 prefix=ddc
 password=Pa22word
-zone=nyc1
+zone=nyc3
 #size=s-4vcpu-8gb
 size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
@@ -187,7 +187,7 @@ if [ "$image" = ubuntu-18-04-x64 ]; then
 fi
 
 echo -n " starting ucp server "
-ssh $user@$controller1 "docker run --rm -i --name ucp --security-opt label=disable -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.$domain --disable-usage --disable-tracking --force-minimums" > /dev/null 2>&1
+ssh $user@$controller1 "docker run --rm -i --name ucp --security-opt label=disable -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:$ucp_ver install --admin-password $password --host-address $controller1 --san ucp.$domain --disable-usage --disable-tracking --force-minimums"  > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " getting tokens "
