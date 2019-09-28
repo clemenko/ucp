@@ -174,7 +174,7 @@ fi
 
 if [ "$image" = rancheros ]; then
   echo " updating to the latest engine"
-  pdsh -l $user -w $host_list 'sudo ros engine switch docker-18.06.1-ce' > /dev/null 2>&1
+  pdsh -l $user -w $host_list 'sudo ros engine switch docker-19.03.2'
   sleep 5
 fi
 
@@ -249,10 +249,10 @@ docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.$domain --
 curl -sk https://$dtr_server/ca > dtr-ca.pem
 echo "$GREEN" "[ok]" "$NORMAL"
 
-echo -n " enabling Routing Mesh"
-token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-curl -skX POST "https://$controller1/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64","InterlockEnabled": true}'
-echo "$GREEN" "[ok]" "$NORMAL"
+#echo -n " enabling Routing Mesh"
+#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+#curl -skX POST "https://$controller1/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64","InterlockEnabled": true}'
+#echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " configuring garbage collection"
 curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"action": "gc","schedule": "0 0 1 * * 0","retries": 0,"deadline": "","stopTimeout": "30s"}' "https://dtr.$domain/api/v0/crons"  > /dev/null 2>&1
