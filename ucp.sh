@@ -291,11 +291,11 @@ if [ "$minio" = true ]; then
   ssh $user@$dtr_server "mkdir /opt/minio; chmod -R 777 /opt/minio; docker run -v /opt/minio/:/opt/:Z -e MINIO_ACCESS_KEY=$min_access -e MINIO_SECRET_KEY=$min_secret -d -p 9000:9000 --name minio minio/minio server /opt" > /dev/null 2>&1
   sleep 5
 
-  min_token=$(curl -sk 'http://dtr.$domain:9000/minio/webrpc' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -d '{"id":1,"jsonrpc":"2.0","params":{"username":"'$min_access'","password":"'$min_secret'"},"method":"Web.Login"}' --compressed | jq -r .result.token)
+  min_token=$(curl -sk 'http://dtr.'$domain':9000/minio/webrpc' -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:71.0) Gecko/20100101 Firefox/71.0' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -d '{"id":1,"jsonrpc":"2.0","params":{"username":"'$min_access'","password":"'$min_secret'"},"method":"Web.Login"}' --compressed | jq -r .result.token)
 
-  curl -sk 'http://dtr.$domain:9000/minio/webrpc' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -H "Authorization: Bearer $min_token"  --data-binary '{"id":1,"jsonrpc":"2.0","params":{"bucketName":"dtr"},"method":"Web.MakeBucket"}' --compressed  > /dev/null 2>&1
+  curl -sk 'http://dtr.'$domain':9000/minio/webrpc' -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:71.0) Gecko/20100101 Firefox/71.0' -H 'Accept-Encoding: gzip, deflate' -H 'Content-Type: application/json' -H "Authorization: Bearer $min_token"  --data-binary '{"id":1,"jsonrpc":"2.0","params":{"bucketName":"dtr"},"method":"Web.MakeBucket"}' --compressed  > /dev/null 2>&1
 
-  curl -skX PUT -u admin:$password 'https://dtr.$domain/api/v0/admin/settings/registry/simple' -H 'content-type: application/json' -d '{"storage":{"delete":{"enabled":true},"maintenance":{"readonly":{"enabled":false}},"s3":{"v4auth":true,"secure":true,"skipverify":false,"regionendpoint":"http://dtr.$domain:9000","bucket":"dtr","rootdirectory":"/","secretkey":"'$min_secret'","region":"us-east-1","accesskey":"'$min_access'"}}}'  > /dev/null 2>&1
+  curl -skX PUT -u admin:$password 'https://dtr.'$domain'/api/v0/admin/settings/registry/simple' -H 'content-type: application/json' -d '{"storage":{"delete":{"enabled":true},"maintenance":{"readonly":{"enabled":false}},"s3":{"v4auth":true,"secure":true,"skipverify":false,"regionendpoint":"http://dtr.$domain:9000","bucket":"dtr","rootdirectory":"/","secretkey":"'$min_secret'","region":"us-east-1","accesskey":"'$min_access'"}}}'  > /dev/null 2>&1
 
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
