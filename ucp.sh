@@ -518,7 +518,7 @@ function status () {
 }
 
 case "$1" in
-        up) up && demo;;
+        up) up;;
         kill) kill;;
         add) add;;
         status) status;;
