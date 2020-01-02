@@ -212,8 +212,11 @@ docker swarm update --task-history-limit=1 > /dev/null 2>&1
 echo "$GREEN" "[ok]" "$NORMAL"
 
 echo -n " adding license "
-docker config create com.docker.license-1 $license_file > /dev/null 2>&1
-docker service update --config-add source=com.docker.license-1,target=/etc/ucp/docker.lic ucp-agent --detach=false > /dev/null 2>&1
+#docker config create com.docker.license-1 $license_file > /dev/null 2>&1
+#docker service update --config-add source=com.docker.license-1,target=/etc/ucp/docker.lic ucp-agent --detach=false > /dev/null 2>&1
+
+curl --cacert ca.pem --cert cert.pem --key key.pem -X PUT "https://$controller1/api/config/license" -H 'Accept: */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/x-www-form-urlencoded' -H "Origin: https://$controller1" -H 'DNT: 1' -H 'Connection: keep-alive' -H "Referer: https://$controller1/manage/settings/license" --data $(cat $license_file) > /dev/null 2>&1
+
 echo "$GREEN" "[ok]" "$NORMAL"
 
 #echo " setting up mangers"
