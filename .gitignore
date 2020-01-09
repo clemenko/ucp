@@ -14,3 +14,5 @@ aws*
 kube.yml
 *.toml
 pki*
+central-bundle
+sensor*

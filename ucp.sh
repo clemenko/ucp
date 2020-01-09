@@ -11,6 +11,7 @@ size=s-4vcpu-8gb
 #size=s-2vcpu-4gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 license_file="docker_subscription.lic"
+stackrox_lic="stackrox.lic"
 domain=dockr.life
 
 image=centos-7-x64
@@ -29,6 +30,11 @@ minio=false # true will add the minio service for testing an s3 service.
 loadbalancer=false # expensive
 storageos=false # soon?
 nfs=false
+
+#stackrox
+INSTALL_DTR=false
+export REGISTRY_USERNAME=andy@stackrox.com
+#REGISTRY_PASSWORD=
 
 ######  NO MOAR EDITS #######
 RED=$(tput setaf 1)
@@ -245,31 +251,33 @@ if [ "$nfs" = true ] && [ "$image" = centos-7-x64 ]; then
   echo "$GREEN" "[ok]" "$NORMAL"
 fi
 
-echo -n " installing DTR "
-docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.$domain --ucp-node $dtr_node --dtr-external-url https://dtr.$domain --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
-#--nfs-storage-url nfs://$dtr_server/opt
+if [ "INSTALL_DTR" = true]; then
+  echo -n " installing DTR "
+  docker run -it --rm docker/dtr:$dtr_ver install --ucp-url https://ucp.$domain --ucp-node $dtr_node --dtr-external-url https://dtr.$domain --ucp-username admin --ucp-password $password --ucp-insecure-tls > /dev/null 2>&1
+  #--nfs-storage-url nfs://$dtr_server/opt
 
-curl -sk https://$dtr_server/ca > dtr-ca.pem
-echo "$GREEN" "[ok]" "$NORMAL"
+  curl -sk https://$dtr_server/ca > dtr-ca.pem
+  echo "$GREEN" "[ok]" "$NORMAL"
 
-#echo -n " enabling Routing Mesh"
-#token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
-#curl -skX POST "https://$controller1/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64","InterlockEnabled": true}'
-#echo "$GREEN" "[ok]" "$NORMAL"
+  #echo -n " enabling Routing Mesh"
+  #token=$(curl -sk "https://$controller1/auth/login" -X POST -d '{"username":"admin","password":"'$password'"}'|jq -r .auth_token)
+  #curl -skX POST "https://$controller1/api/interlock" -X POST -H 'Content-Type: application/json;charset=utf-8' -H "Authorization: Bearer $token" -d '{"HTTPPort":80,"HTTPSPort":8443,"Arch":"x86_64","InterlockEnabled": true}'
+  #echo "$GREEN" "[ok]" "$NORMAL"
 
-echo -n " configuring garbage collection"
-curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"action": "gc","schedule": "0 0 1 * * 0","retries": 0,"deadline": "","stopTimeout": "30s"}' "https://dtr.$domain/api/v0/crons"  > /dev/null 2>&1
-echo "$GREEN" "[ok]" "$NORMAL"
+  echo -n " configuring garbage collection"
+  curl -skX POST --user admin:$password -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"action": "gc","schedule": "0 0 1 * * 0","retries": 0,"deadline": "","stopTimeout": "30s"}' "https://dtr.$domain/api/v0/crons"  > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
 
-echo -n " increasing DTR worker count"
-worker_id=$(curl -skX GET -u admin:$password "https://dtr.$domain/api/v0/workers/" -H "accept: application/json" | jq -r .workers[0].id)
-curl -skX POST -u admin:$password "https://dtr.$domain/api/v0/workers/$worker_id/capacity" -H "accept: application/json" -H "content-type: application/json" -d '{ "capacityMap": { "scan": 2, "scanCheck": 2 }}' > /dev/null 2>&1
-echo "$GREEN" "[ok]" "$NORMAL"
+  echo -n " increasing DTR worker count"
+  worker_id=$(curl -skX GET -u admin:$password "https://dtr.$domain/api/v0/workers/" -H "accept: application/json" | jq -r .workers[0].id)
+  curl -skX POST -u admin:$password "https://dtr.$domain/api/v0/workers/$worker_id/capacity" -H "accept: application/json" -H "content-type: application/json" -d '{ "capacityMap": { "scan": 2, "scanCheck": 2 }}' > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
 
 
-echo -n " enabling scanning engine"
-curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d '{ "reportAnalytics": false, "anonymizeAnalytics": false, "disableBackupWarning": true, "scanningEnabled": true, "scanningSyncOnline": true, "scanningEnableAutoRecheck": true }' > /dev/null 2>&1
-echo "$GREEN" "[ok]" "$NORMAL"
+  echo -n " enabling scanning engine"
+  curl -kX POST --user admin:$password "https://$dtr_server/api/v0/meta/settings" -H "Content-Type: application/json" -H "Accept: application/json"  -d '{ "reportAnalytics": false, "anonymizeAnalytics": false, "disableBackupWarning": true, "scanningEnabled": true, "scanningSyncOnline": true, "scanningEnableAutoRecheck": true }' > /dev/null 2>&1
+  echo "$GREEN" "[ok]" "$NORMAL"
+fi
 
 #if [ "$image" = centos-7-x64 ]; then
 #  echo -n " updating nodes with DTR's CA "
@@ -308,6 +316,37 @@ echo "========= UCP install complete ========="
 echo ""
 status
 }
+
+################################ demo ##############################
+function rox () {
+  echo -n " setting up stackrox "  
+  if [ "$REGISTRY_USERNAME" = "" ] || [ "$REGISTRY_PASSWORD" = "" ]; then echo "Please setup a ENVs for REGISTRY_USERNAME and REGISTRY_PASSWORD..."; exit; fi
+
+  eval "$(<env.sh)" > /dev/null 2>&1
+  controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
+
+  ./central-bundle/central/scripts/setup.sh > /dev/null 2>&1
+  kubectl create -R -f central-bundle/central > /dev/null 2>&1
+  rox_port=$(kubectl -n stackrox get svc central-loadbalancer |grep Node|awk '{print $5}'|sed -e 's/443://g' -e 's#/TCP##g')
+  
+  until [ $(curl -kIs https://$controller1:$rox_port|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 2; done
+    
+  curl -sk -u admin:$password "https://$controller1:$rox_port/v1/licenses/add" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d'{"activate":true,"licenseKey":"'$(cat $stackrox_lic)'"}' > /dev/null 2>&1
+
+  sleep 5
+  
+  roxctl sensor generate k8s --name ucp --central central.stackrox:443 --endpoint $controller1:$rox_port --insecure-skip-tls-verify -p $password > /dev/null 2>&1
+
+  kubectl create -R -f central-bundle/scanner/ > /dev/null 2>&1
+
+  ./sensor-ucp/sensor.sh > /dev/null 2>&1
+  
+  echo ""
+  echo " https://ucp.$domain:$rox_port"
+
+ echo "$GREEN" "[ok]" "$NORMAL"
+}
+
 
 ################################ demo ##############################
 function demo () {
@@ -483,7 +522,7 @@ if [ -f hosts.txt ]; then
    doctl compute load-balancer delete -f $(doctl compute load-balancer list|grep -v ID|awk '{print $1}') > /dev/null 2>&1;
   fi
 
-  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml *.toml*  *.dockercontext tls/ meta.json
+  rm -rf *.txt *.log *.zip *.pem *.pub env.* backup.tar kube.yml *.toml*  *.dockercontext tls/ meta.json sensor*
 else
   echo -n " no hosts file found "
 fi
@@ -523,10 +562,11 @@ function status () {
 case "$1" in
         up) up;;
         kill) kill;;
+        rox) rox ;;
         add) add;;
         status) status;;
         demo) demo;;
-        *) echo "Usage: $0 {up|kill|add|demo|status}"; exit 1
+        *) echo "Usage: $0 {up|kill|add|demo|rox|status}"; exit 1
 esac
 
 
