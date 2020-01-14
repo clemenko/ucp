@@ -3,7 +3,7 @@
 # edit vars
 ###################################
 set -e
-num=3 #3 or larger please!
+num=5 #3 or larger please!
 prefix=ddc
 password=Pa22word
 zone=nyc3
@@ -102,16 +102,19 @@ host_list=$(awk '{printf $1","}' hosts.txt|sed 's/,$//')
 
 #setting nodes
 controller1=$(sed -n 1p hosts.txt|awk '{print $1}')
+manager2=$(sed -n 2p hosts.txt|awk '{printf $1}')
+manager3=$(sed -n 3p hosts.txt|awk '{printf $1}')
 dtr_server=$(sed -n 2p hosts.txt|awk '{printf $1}')
 dtr_node=$(sed -n 2p hosts.txt|awk '{printf $2}')
 worker=$(sed -n 3p hosts.txt|awk '{printf $1}')
 
 echo -n " updating dns "
 doctl compute domain records create $domain --record-type A --record-name ucp --record-ttl 150 --record-data $controller1 > /dev/null 2>&1
+doctl compute domain records create $domain --record-type A --record-name ucp2 --record-ttl 150 --record-data $manager2 > /dev/null 2>&1
+doctl compute domain records create $domain --record-type A --record-name ucp3 --record-ttl 150 --record-data $manager3 > /dev/null 2>&1
 doctl compute domain records create $domain --record-type A --record-name dtr --record-ttl 150 --record-data $dtr_server > /dev/null 2>&1
 doctl compute domain records create $domain --record-type A --record-name app --record-ttl 150 --record-data $worker > /dev/null 2>&1
 doctl compute domain records create $domain --record-type CNAME --record-name "*" --record-ttl 150 --record-data app.$domain. > /dev/null 2>&1
-#doctl compute domain records create $domain --record-type CNAME --record-name "gitlab" --record-ttl 150 --record-data app.$domain. > /dev/null 2>&1
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
@@ -225,8 +228,9 @@ curl --cacert ca.pem --cert cert.pem --key key.pem -X PUT "https://$controller1/
 
 echo "$GREEN" "[ok]" "$NORMAL"
 
-#echo " setting up mangers"
-#pdsh -l root -w $manager2,$manager3 "docker swarm join --token $MGRTOKEN $controller1:2377" > /dev/null 2>&1
+echo -n " setting up mangers"
+pdsh -l root -w $manager2,$manager3 "docker swarm join --token $MGRTOKEN $controller1:2377" > /dev/null 2>&1
+echo "$GREEN" "[ok]" "$NORMAL"
 
 sleep 30
 
@@ -333,18 +337,16 @@ function rox () {
     
   curl -sk -u admin:$password "https://$controller1:$rox_port/v1/licenses/add" -H 'Accept: application/json, text/plain, */*' -H 'Accept-Language: en-US,en;q=0.5' --compressed -H 'Content-Type: application/json;charset=utf-8' -d'{"activate":true,"licenseKey":"'$(cat $stackrox_lic)'"}' > /dev/null 2>&1
 
-  sleep 5
+  sleep 10
   
   roxctl sensor generate k8s --name ucp --central central.stackrox:443 --endpoint $controller1:$rox_port --insecure-skip-tls-verify -p $password > /dev/null 2>&1
 
   kubectl create -R -f central-bundle/scanner/ > /dev/null 2>&1
 
   ./sensor-ucp/sensor.sh > /dev/null 2>&1
-  
-  echo ""
-  echo " https://ucp.$domain:$rox_port"
 
- echo "$GREEN" "[ok]" "$NORMAL"
+  echo "$GREEN" " [ok]" "$NORMAL"
+  echo " - dashboard - https://ucp.$domain:$rox_port"
 }
 
 

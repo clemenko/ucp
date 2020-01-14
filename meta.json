@@ -1,0 +1,1 @@
+{"Name":"ucp-bundle-admin","Metadata":{"Description":"Docker EE cluster 165.22.34.56:443 as user admin","StackOrchestrator":"all"},"Endpoints":{"docker":{"Host":"tcp://165.22.34.56:443","SkipTLSVerify":false},"kubernetes":{"Host":"https://165.22.34.56:6443","SkipTLSVerify":false}}}
