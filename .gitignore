@@ -16,3 +16,5 @@ kube.yml
 pki*
 central-bundle
 sensor*
+*.json
+*.old
